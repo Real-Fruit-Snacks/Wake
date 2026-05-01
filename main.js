@@ -887,6 +887,18 @@ function renderDetail(body, t, state, store, h) {
   recurSelect.addEventListener('change', () => h.onUpdateField(t.id, { recurrence: recurSelect.value || undefined }));
   recurSelect.addEventListener('keydown', stop);
 
+  // ---- Completion date (only when completed) ----
+  if (t.completed) {
+    const compSection = detail.createDiv('wk-detail-section');
+    compSection.createDiv({ cls: 'wk-detail-label', text: 'Completed on' });
+    const compInput = compSection.createEl('input', { cls: 'wk-detail-input', type: 'date' });
+    compInput.value = t.completionDate || '';
+    compInput.addEventListener('change', () => {
+      h.onUpdateField(t.id, { completionDate: compInput.value || undefined });
+    });
+    compInput.addEventListener('keydown', stop);
+  }
+
   // ---- Project ----
   const projSection = detail.createDiv('wk-detail-section');
   projSection.createDiv({ cls: 'wk-detail-label', text: 'Project' });
@@ -966,10 +978,7 @@ function renderDetail(body, t, state, store, h) {
     metaSection.createSpan({ cls: 'wk-detail-meta-k', text: 'Created' });
     metaSection.createSpan({ cls: 'wk-detail-meta-v', text: t.createdAt.slice(0, 10) });
   }
-  if (t.completed && t.completionDate) {
-    metaSection.createSpan({ cls: 'wk-detail-meta-k', text: 'Completed' });
-    metaSection.createSpan({ cls: 'wk-detail-meta-v', text: t.completionDate });
-  }
+  // Completion date is editable above (see "Completed on" section). Not shown here.
   metaSection.createSpan({ cls: 'wk-detail-meta-k', text: 'ID' });
   metaSection.createSpan({ cls: 'wk-detail-meta-v', text: t.id });
 

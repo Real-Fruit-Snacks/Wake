@@ -1,7 +1,7 @@
 {
   "id": "wake",
   "name": "Wake",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "minAppVersion": "1.5.0",
   "description": "A keyboard-first task manager for Obsidian. Wake provides projects, recurring tasks, priorities, smart views, and a permanent logbook in a self-contained panel — your vault stays clean while [[Note]] references keep tasks connected to your notes.",
   "author": "Real-Fruit-Snacks",

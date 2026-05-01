@@ -2,6 +2,11 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.2] - 2026-05-01
+
+### Changed
+- Completion date is now editable. When a task is completed, the detail pane shows a *Completed on* date input — backdate it if you finished work earlier than you marked it done. The read-only `Completed` line in the metadata strip is gone (the editable field replaces it).
+
 ## [0.6.1] - 2026-05-01
 
 ### Changed
