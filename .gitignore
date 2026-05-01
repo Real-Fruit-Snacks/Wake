@@ -25,3 +25,7 @@ node_modules/
 
 # --- Build artifacts (main.js is hand-written and committed) ---
 *.js.map
+
+# --- Release zip staging (built by CI, sometimes locally for testing) ---
+wake-*.zip
+/wake/
