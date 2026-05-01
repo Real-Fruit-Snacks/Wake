@@ -1,0 +1,11 @@
+{
+  "id": "wake",
+  "name": "Wake",
+  "version": "0.6.0",
+  "minAppVersion": "1.5.0",
+  "description": "A keyboard-first task manager with projects, a logbook for completed work, and links to vault notes via [[Note]]. Tasks are self-contained inside the plugin.",
+  "author": "Real-Fruit-Snacks",
+  "authorUrl": "https://github.com/Real-Fruit-Snacks",
+  "fundingUrl": "https://github.com/sponsors/Real-Fruit-Snacks",
+  "isDesktopOnly": false
+}

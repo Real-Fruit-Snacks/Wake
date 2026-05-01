@@ -1,0 +1,27 @@
+# --- Local development artifacts (not for GitHub) ---
+mockups/
+PLAN.md
+
+# --- Plugin runtime data (user's own tasks, never commit) ---
+data.json
+
+# --- Editor and OS files ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Logs and temp ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Node (reserved if tooling is ever added) ---
+node_modules/
+
+# --- Build artifacts (main.js is hand-written and committed) ---
+*.js.map
