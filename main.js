@@ -511,9 +511,14 @@ function applyView(todos, view, search, showCompleted) {
   let result = todos.slice();
 
   const isLogbook = view.kind === 'logbook';
+  // Project and Inbox are organizational containers — completed tasks stay visible
+  // there so users can see what they've finished within each project. Time-based
+  // smart lists (Today, This Week, etc.) and All Active still respect showCompleted.
+  const isContainerScope = view.kind === 'project' || view.kind === 'inbox';
+
   if (isLogbook) {
     result = result.filter(t => t.completed);
-  } else if (!showCompleted) {
+  } else if (!showCompleted && !isContainerScope) {
     result = result.filter(t => !t.completed);
   }
 
@@ -584,9 +589,16 @@ function groupTodos(todos, by, store) {
 function sortInGroups(groups, sortBy, by) {
   for (const todos of groups.values()) {
     todos.sort((a, b) => {
+      // Logbook is grouped by completion date already; sort newest-completed first.
       if (by === 'completion') {
         return (b.completionDate ?? '').localeCompare(a.completionDate ?? '');
       }
+      // Everywhere else: completed tasks sink to the bottom of each group, so
+      // active work stays visually prominent. Within the completed bucket, the
+      // most recently finished task appears first.
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.completed) return (b.completionDate ?? '').localeCompare(a.completionDate ?? '');
+      // Active tasks: apply user's sort preference.
       if (sortBy === 'priority') return (a.priority ?? 99) - (b.priority ?? 99);
       if (sortBy === 'due')      return (a.due ?? 'zzzz').localeCompare(b.due ?? 'zzzz');
       if (sortBy === 'manual')   return (a.order ?? 0) - (b.order ?? 0);

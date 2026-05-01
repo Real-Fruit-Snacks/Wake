@@ -2,6 +2,15 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.1] - 2026-05-01
+
+### Changed
+- Completed tasks now stay visible inside their project and Inbox views (they were previously only visible in the Logbook). Project / Inbox views always show completed work; time-based smart lists (`Today`, `This Week`, `Overdue`, `No Date`) and `All Active` still respect the *Show completed* setting.
+- Completed tasks now sink to the bottom of every group, sorted by completion date (newest first). Active work stays visually prominent regardless of how the view is grouped or sorted.
+
+### Fixed
+- Releases now ship a `wake-<version>.zip` install bundle alongside the individual files. Extract directly into `<vault>/.obsidian/plugins/`.
+
 ## [0.6.0] - 2026-04-30
 
 ### Added
