@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wake / Keyboard-first task manager for Obsidian</title>
+<meta name="description" content="Self-contained task database for Obsidian. Tasks live in the plugin, not in your markdown. Smart lists, recurrence DSL, projects, tags, multi-select, command palette.">
+<meta property="og:title" content="Wake — Keyboard-first task manager for Obsidian">
+<meta property="og:description" content="Self-contained · 6 smart lists · every: DSL · keyboard-first · TypeScript · zero deps">
+<meta property="og:image" content="https://raw.githubusercontent.com/Real-Fruit-Snacks/Wake/main/docs/assets/social-preview.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231e1e2e'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Inter,sans-serif' font-size='20' font-weight='800' fill='%23cdd6f4'%3EW%3Ctspan fill='%23f9e2af'%3E.%3C/tspan%3E%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --base:#1e1e2e;--mantle:#181825;--crust:#11111b;
+  --sf0:#313244;--sf1:#45475a;--sf2:#585b70;
+  --ov0:#6c7086;--ov1:#7f849c;--ov2:#9399b2;
+  --sub0:#a6adc8;--sub1:#bac2de;--text:#cdd6f4;
+  --mauve:#cba6f7;--lav:#b4befe;--blue:#89b4fa;--sky:#89dceb;
+  --teal:#94e2d5;--green:#a6e3a1;--yellow:#f9e2af;--peach:#fab387;--red:#f38ba8;
+  --accent:#f9e2af; /* Wake's yellow */
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--crust);color:var(--text);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.5;
+}
+::selection{background:var(--accent);color:var(--crust)}
+a{color:inherit;text-decoration:none}
+.mono{font-family:'JetBrains Mono','SF Mono',monospace}
+
+/* ─── Top status bar ─────────────────────────────── */
+.status{
+  background:var(--crust);border-bottom:1px solid var(--text);
+  padding:10px 24px;display:flex;justify-content:space-between;
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:11px;
+  letter-spacing:0.1em;text-transform:uppercase;color:var(--ov2);
+  position:sticky;top:0;z-index:10;
+}
+.status .left{display:flex;gap:24px;flex-wrap:wrap}
+.status .right{display:flex;gap:16px;flex-wrap:wrap}
+.status b{color:var(--accent);font-weight:700}
+.status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:middle;animation:pulse 2.5s infinite}
+.status a{color:var(--ov2);transition:color .15s}
+.status a:hover{color:var(--text)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ─── Hero ─────────────────────────────────────── */
+.hero{
+  border-bottom:1px solid var(--text);
+  padding:64px 24px 0;
+}
+.hero-inner{max-width:1280px;margin:0 auto}
+.hero .pop{
+  font-family:'JetBrains Mono','SF Mono',monospace;
+  font-size:12px;font-weight:500;color:var(--ov1);
+  letter-spacing:0.1em;text-transform:uppercase;
+  display:block;margin-bottom:24px;
+}
+.hero h1{
+  font-family:'Inter',sans-serif;
+  font-size:clamp(72px,14vw,200px);
+  line-height:0.85;font-weight:800;
+  letter-spacing:-0.05em;color:var(--text);
+  margin-bottom:32px;
+}
+.hero h1 .dot{color:var(--accent)}
+.hero-grid{
+  display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:0;border-top:1px solid var(--sf1);
+}
+.hero-grid > div{padding:20px 24px;border-right:1px solid var(--sf1)}
+.hero-grid > div:last-child{border-right:none}
+.hero-grid .label{
+  font-family:'JetBrains Mono','SF Mono',monospace;
+  font-size:10px;color:var(--ov0);
+  letter-spacing:0.18em;text-transform:uppercase;margin-bottom:8px;
+}
+.hero-grid .value{
+  font-family:'Inter',sans-serif;
+  font-size:28px;font-weight:700;color:var(--text);
+  letter-spacing:-0.02em;
+}
+.hero-grid .value .unit{color:var(--accent);font-size:0.55em;font-weight:600;margin-left:2px}
+
+/* ─── Modular grid layout ─────────────────────── */
+.grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  border-bottom:1px solid var(--sf1);
+}
+.cell{
+  padding:48px 32px;border-right:1px solid var(--sf1);position:relative;
+}
+.cell:last-child{border-right:none}
+.cell.full{grid-column:1/-1;border-right:none}
+.cell-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:24px;padding-bottom:14px;
+  border-bottom:1px dashed var(--sf1);
+}
+.cell-num{
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:11px;
+  color:var(--accent);letter-spacing:0.15em;font-weight:700;
+}
+.cell-name{
+  font-family:'Inter',sans-serif;font-size:13px;color:var(--ov2);
+  letter-spacing:0.2em;text-transform:uppercase;font-weight:500;
+}
+.cell h2{
+  font-size:36px;line-height:1.05;font-weight:700;
+  letter-spacing:-0.025em;margin-bottom:16px;
+}
+.cell h2 mark{background:var(--accent);color:var(--crust);padding:0 6px;font-style:normal}
+.cell p{color:var(--sub0);font-size:16px;line-height:1.65;margin-bottom:14px}
+.cell p strong{color:var(--text);font-weight:600}
+.cell p code{
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:13px;
+  background:var(--mantle);padding:2px 7px;border-radius:3px;color:var(--green);
+}
+
+/* Spec table — KEY → VALUE */
+.feat{
+  display:grid;grid-template-columns:auto 1fr;
+  gap:18px 24px;margin-top:24px;
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:13px;
+}
+.feat .k{color:var(--accent);font-weight:700;letter-spacing:0.05em}
+.feat .v{color:var(--sub1);line-height:1.65}
+.feat .v b{color:var(--text);font-weight:600}
+
+/* Code block */
+pre.code{
+  background:var(--mantle);border:1px solid var(--text);
+  border-left:6px solid var(--accent);padding:20px 24px;
+  font-family:'JetBrains Mono','SF Mono',monospace;
+  font-size:13px;line-height:1.85;color:var(--sub1);
+  overflow-x:auto;margin-top:20px;
+}
+pre.code .c{color:var(--ov0)}
+pre.code .k{color:var(--mauve);font-weight:500}
+pre.code .s{color:var(--green)}
+pre.code .p{color:var(--peach)}
+pre.code .v{color:var(--blue)}
+
+/* Big call to action band */
+.band{
+  background:var(--text);color:var(--crust);
+  padding:48px 32px;border-bottom:1px solid var(--text);
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:32px;
+}
+.band-tag{
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:11px;
+  letter-spacing:0.2em;text-transform:uppercase;font-weight:600;
+}
+.band h3{
+  font-family:'Inter',sans-serif;font-weight:700;
+  font-size:32px;line-height:1.1;letter-spacing:-0.02em;
+}
+.band a.cta{
+  background:var(--crust);color:var(--text);
+  padding:16px 28px;font-family:'JetBrains Mono','SF Mono',monospace;
+  font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+  border:1px solid var(--crust);transition:all 0.15s;white-space:nowrap;
+}
+.band a.cta:hover{background:var(--accent);color:var(--crust);border-color:var(--accent)}
+
+/* Footer */
+footer{
+  padding:32px 24px;display:flex;justify-content:space-between;
+  font-family:'JetBrains Mono','SF Mono',monospace;font-size:11px;
+  color:var(--ov0);letter-spacing:0.1em;text-transform:uppercase;flex-wrap:wrap;gap:16px;
+}
+footer a{color:var(--ov2);border-bottom:1px solid var(--sf0);transition:all .15s}
+footer a:hover{color:var(--text);border-bottom-color:var(--text)}
+
+@media (max-width:760px){
+  .hero h1{font-size:72px}
+  .hero-grid{grid-template-columns:1fr 1fr}
+  .grid{grid-template-columns:1fr}
+  .cell{border-right:none;border-bottom:1px solid var(--sf1)}
+  .cell:last-child{border-bottom:none}
+  .band{grid-template-columns:1fr;text-align:left}
+  .status{font-size:10px;padding:10px 14px}
+  .status .left,.status .right{gap:14px}
+}
+</style>
+</head>
+<body>
+
+<div class="status">
+  <div class="left">
+    <span><b>WAKE</b></span>
+    <span><span class="dot"></span>OBSIDIAN PLUGIN</span>
+    <span>TYPESCRIPT</span>
+  </div>
+  <div class="right">
+    <a href="https://github.com/Real-Fruit-Snacks/Wake">REPO</a>
+    <a href="https://github.com/Real-Fruit-Snacks/Wake/releases">RELEASES</a>
+    <a href="https://github.com/Real-Fruit-Snacks/Wake/blob/main/LICENSE">MIT</a>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="hero-inner">
+    <span class="pop">Real-Fruit-Snacks &nbsp;//&nbsp; obsidian plugin &nbsp;//&nbsp; keyboard-first</span>
+    <h1>WAKE<span class="dot">.</span></h1>
+    <div class="hero-grid">
+      <div>
+        <div class="label">storage</div>
+        <div class="value">data<span class="unit">.json</span></div>
+      </div>
+      <div>
+        <div class="label">smart lists</div>
+        <div class="value">6<span class="unit"> views</span></div>
+      </div>
+      <div>
+        <div class="label">recurrence</div>
+        <div class="value">every<span class="unit">: DSL</span></div>
+      </div>
+      <div>
+        <div class="label">stack</div>
+        <div class="value">TS<span class="unit"> · zero-dep</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grid">
+  <div class="cell">
+    <div class="cell-header">
+      <span class="cell-num">01</span>
+      <span class="cell-name">Premise</span>
+    </div>
+    <h2>Tasks are <mark>data</mark>. Notes are prose.</h2>
+    <p>Wake is an Obsidian plugin that maintains a self-contained task database. Tasks are stored in the plugin's <code>data.json</code> — Wake does not scan, parse, or modify your markdown notes.</p>
+    <p>If you want tasks embedded in markdown, you want <strong>Tasks</strong> or <strong>Dataview</strong>. They're great. Wake is the opposite philosophy: vault stays clean, tasks stay structured, history stays forever.</p>
+  </div>
+
+  <div class="cell">
+    <div class="cell-header">
+      <span class="cell-num">02</span>
+      <span class="cell-name">Specs</span>
+    </div>
+    <h2>What's in the box.</h2>
+    <div class="feat">
+      <div class="k">STORAGE</div><div class="v">Self-contained <b>data.json</b> — no markdown parsing, no vault clutter.</div>
+      <div class="k">VIEWS</div><div class="v"><b>6 smart lists</b> — Active · Today · Overdue · This Week · No Date · Logbook.</div>
+      <div class="k">PROJECTS</div><div class="v">Color-tagged · archive · drag-to-reorder · or none (Inbox).</div>
+      <div class="k">RECURRENCE</div><div class="v"><b>every: DSL</b> — <code>every:day</code>, <code>every:monday</code>, <code>every:3-days</code>.</div>
+      <div class="k">PALETTE</div><div class="v"><code>Ctrl+K</code> for every action · <code>Ctrl+Shift+T</code> quick-add with live preview.</div>
+      <div class="k">STACK</div><div class="v">Pure <b>TypeScript</b> · Obsidian Plugin API · zero external dependencies.</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="cell full">
+    <div class="cell-header">
+      <span class="cell-num">03</span>
+      <span class="cell-name">Quickstart</span>
+    </div>
+    <h2>Install, open, type.</h2>
+    <p>Manual install or via BRAT. After enabling, click the check-circle ribbon or run <code>Open Wake panel</code> from the command palette.</p>
+<pre class="code"><span class="c"># Manual install</span>
+1. <span class="k">Download</span> manifest.json, main.js, styles.css <span class="c"># from latest release</span>
+2. <span class="k">Create</span> &lt;your-vault&gt;/.obsidian/plugins/wake/
+3. <span class="k">Drop</span> the three files into that folder
+4. <span class="k">Enable</span> Settings → Community plugins → Wake
+5. <span class="k">Open</span> ribbon icon, or "Open Wake panel" from palette
+
+<span class="c"># Quick-add — Ctrl+Shift+T</span>
+"Buy groceries <span class="p">due:tomorrow</span> <span class="v">#errands</span> <span class="s">[[Shopping list]]</span> !2"
+                              <span class="c"># All metadata in one line</span></pre>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="cell">
+    <div class="cell-header">
+      <span class="cell-num">04</span>
+      <span class="cell-name">Syntax</span>
+    </div>
+    <h2>Quick-add tokens.</h2>
+    <div class="feat">
+      <div class="k">today / tomorrow</div><div class="v">Due date shortcuts</div>
+      <div class="k">due:YYYY-MM-DD</div><div class="v">Explicit due date</div>
+      <div class="k">start:YYYY-MM-DD</div><div class="v">Hide until start date</div>
+      <div class="k">every:VALUE</div><div class="v"><code>day</code>, <code>week</code>, <code>monday</code>, <code>3-days</code></div>
+      <div class="k">#tag</div><div class="v">Cross-cutting tag (multiple allowed)</div>
+      <div class="k">[[Note]]</div><div class="v">Link to a vault note (clickable)</div>
+      <div class="k">!1 ... !4</div><div class="v">Priority — urgent → low</div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="cell-header">
+      <span class="cell-num">05</span>
+      <span class="cell-name">Keyboard</span>
+    </div>
+    <h2>Every action has a key.</h2>
+    <div class="feat">
+      <div class="k">j / k</div><div class="v">Move cursor down / up</div>
+      <div class="k">x</div><div class="v">Toggle complete on selection</div>
+      <div class="k">e</div><div class="v">Inline-edit task text</div>
+      <div class="k">Space</div><div class="v">Toggle detail pane</div>
+      <div class="k">1 / 2 / 3 / 4</div><div class="v">Set priority on selection</div>
+      <div class="k">Shift+J/K</div><div class="v">Reorder within project</div>
+      <div class="k">Ctrl+K</div><div class="v">Command palette</div>
+      <div class="k">Ctrl+Shift+T</div><div class="v">Quick-add (anywhere in Obsidian)</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="cell">
+    <div class="cell-header">
+      <span class="cell-num">06</span>
+      <span class="cell-name">Philosophy</span>
+    </div>
+    <h2>Vault stays clean. Database stays queryable.</h2>
+    <p>Obsidian-native task plugins almost universally <strong>scan and parse your markdown</strong>. That works until you want priorities, recurrence, structured projects, completion history, or smart lists across hundreds of notes. Then the parser fights you, the syntax bloats, and your vault becomes a database masquerading as prose.</p>
+    <p>Wake takes the opposite stance: <strong>tasks are data, notes are prose</strong>. Tasks reference notes via <code>[[Note]]</code> links, but the data lives separately and structured.</p>
+    <p style="color:var(--ov1);font-size:14px;font-style:italic">No emojis anywhere. Clean typography throughout.</p>
+  </div>
+</div>
+
+<div class="band">
+  <div class="band-tag">→ INSTALL</div>
+  <h3>Self-contained tasks for Obsidian.<br>Surface what matters today.</h3>
+  <a class="cta" href="https://github.com/Real-Fruit-Snacks/Wake/releases">Download release</a>
+</div>
+
+<footer>
+  <span>© 2026 Real-Fruit-Snacks · MIT</span>
+  <span>
+    <a href="https://real-fruit-snacks.github.io/">all projects</a> &nbsp;·&nbsp;
+    <a href="https://github.com/Real-Fruit-Snacks/Wake">github</a> &nbsp;·&nbsp;
+    <a href="https://github.com/Real-Fruit-Snacks/Wake/releases">releases</a> &nbsp;·&nbsp;
+    <a href="https://github.com/Real-Fruit-Snacks/Wake/blob/main/CHANGELOG.md">changelog</a>
+  </span>
+</footer>
+
+</body>
+</html>
