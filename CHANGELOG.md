@@ -2,6 +2,11 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.3] - 2026-05-01
+
+### Fixed
+- Single click on the detail pane's Close (or any action button) now works after editing the title or description. Previously a click was eaten because the textarea's blur-triggered re-render destroyed the click target before the click event could fire — fixed by deferring the field's save to the next tick.
+
 ## [0.6.2] - 2026-05-01
 
 ### Changed

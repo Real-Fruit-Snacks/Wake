@@ -812,7 +812,14 @@ function renderDetail(body, t, state, store, h) {
   titleSection.createDiv({ cls: 'wk-detail-label', text: 'Title' });
   const titleInput = titleSection.createEl('input', { cls: 'wk-detail-input', type: 'text' });
   titleInput.value = t.text || '';
-  titleInput.addEventListener('change', () => h.onUpdateField(t.id, { text: titleInput.value.trim() || t.text }));
+  // Defer the save so a click on an action button (Close, Mark complete, etc.)
+  // can finish before the re-render destroys the click target. The textarea's blur
+  // fires between mousedown and mouseup; saving immediately would otherwise eat
+  // the click.
+  titleInput.addEventListener('change', () => {
+    const value = titleInput.value.trim() || t.text;
+    setTimeout(() => h.onUpdateField(t.id, { text: value }), 0);
+  });
   titleInput.addEventListener('keydown', e => {
     stop(e);
     if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
@@ -825,7 +832,12 @@ function renderDetail(body, t, state, store, h) {
   descArea.value = t.description || '';
   descArea.placeholder = 'Notes, context, links — anything you want to remember about this task.';
   descArea.rows = 4;
-  descArea.addEventListener('change', () => h.onUpdateField(t.id, { description: descArea.value }));
+  // Same deferral pattern as the title input above — keeps single-click on Close
+  // (or any action button) from being eaten by the re-render that follows blur.
+  descArea.addEventListener('change', () => {
+    const value = descArea.value;
+    setTimeout(() => h.onUpdateField(t.id, { description: value }), 0);
+  });
   descArea.addEventListener('keydown', stop);
 
   // ---- 4-column property row: priority / due / start / recurrence ----
