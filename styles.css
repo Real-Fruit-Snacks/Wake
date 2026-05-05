@@ -862,6 +862,17 @@
   border-color: var(--interactive-accent) !important;
   box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15) !important;
 }
+.wk-qa-select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px !important;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+                    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) !important;
+  background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px !important;
+  background-size: 5px 5px !important;
+  background-repeat: no-repeat !important;
+}
 
 .wk-qa-section-label {
   font-size: 10px;

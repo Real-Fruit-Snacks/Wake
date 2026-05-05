@@ -1283,12 +1283,20 @@ class QuickAddModal extends Modal {
     const header = this.contentEl.createDiv('wk-qa-header');
     header.createDiv({ cls: 'wk-qa-title', text: 'New task' });
 
-    const projectName = this.defaultProjectId
-      ? (this.plugin.store.projectById(this.defaultProjectId)?.name || 'Inbox')
-      : 'Inbox';
-    header.createDiv({ cls: 'wk-qa-subtitle', text: `Will be added to: ${projectName}` });
+    // Project picker — defaults to the active view's project (or Inbox).
+    // User can change it inline; the submit uses the selected value, not defaultProjectId.
+    const projectWrap = this.contentEl.createDiv('wk-qa-input-wrap');
+    projectWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Project' });
+    const projectSelect = projectWrap.createEl('select', { cls: 'wk-qa-input wk-qa-select' });
+    projectSelect.createEl('option', { text: 'Inbox (no project)', attr: { value: '' } });
+    for (const p of this.plugin.store.allProjects()) {
+      const opt = projectSelect.createEl('option', { text: p.name, attr: { value: p.id } });
+      if (this.defaultProjectId === p.id) opt.selected = true;
+    }
+    projectSelect.addEventListener('keydown', e => e.stopPropagation());
 
     const inputWrap = this.contentEl.createDiv('wk-qa-input-wrap');
+    inputWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Task' });
     const input = inputWrap.createEl('input', { cls: 'wk-qa-input', type: 'text' });
     input.placeholder = 'What needs doing?';
 
@@ -1367,7 +1375,8 @@ class QuickAddModal extends Modal {
     const submit = async () => {
       const text = input.value.trim();
       if (!text) return;
-      const t = await this.plugin.store.add(text, this.defaultProjectId);
+      const projectId = projectSelect.value || null;
+      const t = await this.plugin.store.add(text, projectId);
       new Notice(`Added: ${t.text}`);
       this.close();
     };

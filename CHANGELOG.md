@@ -2,6 +2,11 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.4] - 2026-05-05
+
+### Added
+- Project picker dropdown in the new-task modal. Defaults to the active view's project (or Inbox), but you can change it inline before creating the task. Replaces the previous static "Will be added to: ..." subtitle.
+
 ## [0.6.3] - 2026-05-01
 
 ### Fixed
