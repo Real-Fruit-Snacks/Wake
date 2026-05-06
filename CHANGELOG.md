@@ -2,6 +2,11 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.7.2] - 2026-05-06
+
+### Fixed
+- **Project dropdown chevron crowded the visible text** in the new-task modal and the detail pane's project / recurrence selects. The previous chevron was rendered with two CSS `linear-gradient` filled triangles whose geometry produced two adjacent dark blocks at the top of the chevron area instead of a clean V — which read as "the project name got chopped off." The chevron is now drawn from an inline SVG, with more right-padding so the option text always has clear space before the icon. `white-space: nowrap; overflow: hidden; text-overflow: ellipsis;` are also set explicitly so genuinely long names get a proper ellipsis instead of arbitrary truncation.
+
 ## [0.7.1] - 2026-05-06
 
 ### Fixed

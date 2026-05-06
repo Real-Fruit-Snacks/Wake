@@ -498,12 +498,17 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 28px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--wk-text-muted) 50%),
-                    linear-gradient(135deg, var(--wk-text-muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 13px, calc(100% - 9px) 13px;
-  background-size: 5px 5px;
+  /* Same SVG chevron as the new-task modal select — the previous gradient
+     hack rendered two adjacent dark blocks instead of a chevron and crowded
+     the text on the right. */
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-size: 12px 12px;
   background-repeat: no-repeat;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 4-up property row */
@@ -870,12 +875,15 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  padding: 10px 30px 10px 12px !important;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
-                    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) !important;
-  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50% !important;
-  background-size: 5px 5px !important;
+  /* Right padding leaves room for the SVG chevron (12px wide, positioned 12px
+     from the right edge) plus a comfortable gap before the option text. */
+  padding: 10px 36px 10px 12px !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E") !important;
+  background-position: right 12px center !important;
+  background-size: 12px 12px !important;
   background-repeat: no-repeat !important;
+  white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
