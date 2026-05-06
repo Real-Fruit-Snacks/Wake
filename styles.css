@@ -819,15 +819,19 @@
 
 /* Quick-add + project modals share the same chrome */
 .modal.wk-quickadd-modal,
-.modal.wk-project-modal {
+.modal.wk-project-modal,
+.modal.wk-help-modal {
   width: 520px;
   max-width: calc(100vw - 32px);
   padding: 0;
 }
+.modal.wk-help-modal { width: 720px; }
 .wk-quickadd-modal .modal-content,
-.wk-project-modal .modal-content { padding: 0; }
+.wk-project-modal .modal-content,
+.wk-help-modal .modal-content { padding: 0; }
 .wk-quickadd-modal .modal-close-button,
-.wk-project-modal .modal-close-button { top: 12px; right: 12px; }
+.wk-project-modal .modal-close-button,
+.wk-help-modal .modal-close-button { top: 12px; right: 12px; }
 
 .wk-qa-header {
   padding: 20px 24px 4px;
@@ -1101,5 +1105,233 @@
 @media (max-width: 600px) {
   .wk-root .wk-sidebar {
     display: none;
+  }
+}
+
+/* ============================================================
+   v0.7 — Subtasks, drag/drop, bulk bar, search highlight, help
+   ============================================================ */
+
+/* Subtask rows: indent with a dim guide line at the indent column. */
+.wk-root .wk-row.wk-row-subtask {
+  padding-left: 36px;
+}
+.wk-root .wk-row.wk-row-subtask::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--wk-border);
+}
+
+/* Progress chip on parent rows: e.g. "2/5". */
+.wk-root .wk-subtask-progress {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--wk-text-dim);
+  background: var(--wk-bg-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 6px;
+  letter-spacing: 0.02em;
+}
+
+/* Subtasks list inside the detail pane. */
+.wk-root .wk-detail-subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.wk-root .wk-detail-subtasks-empty {
+  font-size: 12px;
+  color: var(--wk-text-dim);
+  font-style: italic;
+  padding: 4px 0;
+}
+.wk-root .wk-detail-subtask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--wk-bg-elev, transparent);
+}
+.wk-root .wk-detail-subtask:hover { background: var(--wk-bg-hover); }
+.wk-root .wk-detail-subtask-text {
+  flex: 1 1 auto;
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wk-root .wk-detail-subtask-text:hover {
+  text-decoration: underline;
+}
+.wk-root .wk-detail-subtask.wk-detail-subtask-done .wk-detail-subtask-text {
+  color: var(--wk-text-dim);
+  text-decoration: line-through;
+}
+.wk-root .wk-detail-subtask-input {
+  margin-top: 6px;
+}
+
+/* Drag-and-drop visual feedback. */
+.wk-root .wk-row.wk-row-dragging {
+  opacity: 0.45;
+}
+.wk-root .wk-row.wk-row-drop-target {
+  background: var(--wk-bg-active);
+  outline: 2px dashed var(--wk-accent, var(--interactive-accent, #7c5cff));
+  outline-offset: -2px;
+}
+.wk-root .wk-side-item.wk-side-item-drop-target {
+  background: var(--wk-bg-active);
+  outline: 1.5px dashed var(--wk-accent, var(--interactive-accent, #7c5cff));
+  outline-offset: -1px;
+}
+
+/* Search highlight in row text. */
+.wk-root .wk-search-hl {
+  background: rgba(255, 200, 0, 0.32);
+  color: var(--wk-text);
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: 0 0 0 0.5px rgba(255, 200, 0, 0.5);
+}
+
+/* Bulk action bar — appears above the status bar when multiple rows selected. */
+.wk-root .wk-bulkbar {
+  display: none;
+}
+.wk-root .wk-bulkbar.wk-bulkbar-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--wk-bg-elev, var(--background-secondary));
+  border-top: 1px solid var(--wk-border);
+  border-bottom: 1px solid var(--wk-border);
+  font-size: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.wk-root .wk-bulkbar-count {
+  font-weight: 600;
+  color: var(--wk-accent, var(--interactive-accent, #7c5cff));
+  margin-right: 4px;
+}
+.wk-root .wk-bulkbar-sep {
+  color: var(--wk-text-dim);
+  opacity: 0.4;
+}
+.wk-root .wk-bulkbar-label {
+  color: var(--wk-text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wk-root .wk-bulkbar-btn {
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wk-text);
+  border: 1px solid var(--wk-border);
+  user-select: none;
+  transition: background 0.08s, border-color 0.08s;
+}
+.wk-root .wk-bulkbar-btn:hover {
+  background: var(--wk-bg-hover);
+  border-color: var(--wk-accent, var(--interactive-accent, #7c5cff));
+}
+.wk-root .wk-bulkbar-btn-danger {
+  color: var(--wk-p1, #ff5e5e);
+}
+.wk-root .wk-bulkbar-btn-danger:hover {
+  background: rgba(255, 94, 94, 0.1);
+  border-color: var(--wk-p1, #ff5e5e);
+}
+.wk-root .wk-bulkbar-pri {
+  display: inline-flex;
+  gap: 2px;
+}
+.wk-root .wk-bulkbar-pri-pill {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  background: transparent;
+  user-select: none;
+  border: 1px solid transparent;
+}
+.wk-root .wk-bulkbar-pri-pill:hover {
+  background: var(--wk-bg-hover);
+  border-color: var(--wk-border);
+}
+.wk-root .wk-bulkbar-pri-clear {
+  color: var(--wk-text-dim);
+}
+
+/* Keyboard help modal — multi-column grid of shortcuts. */
+.wk-help-modal .wk-help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+  padding: 16px 24px 4px;
+}
+.wk-help-modal .wk-help-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wk-help-modal .wk-help-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--wk-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--wk-border);
+}
+.wk-help-modal .wk-help-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.wk-help-modal .wk-help-kbds {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.wk-help-modal .wk-kbd-help {
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--wk-bg-hover, rgba(0, 0, 0, 0.18));
+  border: 1px solid var(--wk-border);
+  color: var(--wk-text);
+}
+.wk-help-modal .wk-help-label {
+  color: var(--wk-text);
+}
+@media (max-width: 600px) {
+  .wk-help-modal .wk-help-grid {
+    grid-template-columns: 1fr;
   }
 }

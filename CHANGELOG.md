@@ -2,6 +2,22 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-05-06
+
+### Added
+- **Subtasks**. Tasks can have nested subtasks one level deep. Add them from the detail pane (`+ Add subtask` input) or the row right-click menu. Parent rows show a `done/total` progress chip; subtasks render indented under their parent in views where both are visible. Use `Tab` to indent the cursor task as a subtask of the row above, `Shift+Tab` to promote it back to a root task.
+- **Drag and drop**. Drag a task row onto another row to make it a subtask of the target. Drag a task onto a sidebar project (or Inbox) to reassign it. Visual hint highlights the drop target.
+- **Bulk action bar**. When two or more rows are selected, a toolbar appears above the status bar with `Toggle complete`, priority pills, due-date shortcuts (`Today` / `Tomorrow` / `Clear`), `Move to...` menu, and `Delete`. Replaces having to right-click for every batch operation.
+- **Keyboard cheatsheet**. Press `?` while a Wake panel is focused to open a multi-column overlay listing every shortcut, grouped by category. Press `?` or `Escape` again to dismiss.
+- **Wider search scope**. The toolbar search now matches task descriptions, tags, linked-note names, and project names — not just the title — and matches are highlighted inline in the row.
+
+### Changed
+- The detail pane's right-click action `Add subtask...` opens the parent's detail pane and focuses the new-subtask input instead of opening a separate prompt.
+
+### Notes
+- 1-level depth is enforced. Dragging a task that already has subtasks onto another row is refused (you'd otherwise create grand-children); the offending row gets a notice instead. Existing data with deeper nesting is flattened on load.
+- Deleting a task with subtasks orphans the children (they become root tasks) rather than cascade-deleting them.
+
 ## [0.6.5] - 2026-05-05
 
 ### Added

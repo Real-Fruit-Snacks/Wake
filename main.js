@@ -441,9 +441,16 @@ class WakeStore {
 
   // ---- Tasks ----
 
-  async add(rawInput, defaultProjectId = null) {
+  async add(rawInput, defaultProjectId = null, defaultParentId = null) {
     const parsed = parseTodoText(rawInput);
     this.plugin.data.lastId += 1;
+    // Subtasks inherit their parent's project so they don't get orphaned
+    // visually if the user filters by project.
+    let projectId = defaultProjectId || null;
+    if (defaultParentId) {
+      const p = this.byId(defaultParentId);
+      if (p) projectId = p.project || null;
+    }
     const t = {
       id: `wk-${this.plugin.data.lastId}`,
       text: parsed.text,
@@ -455,7 +462,8 @@ class WakeStore {
       recurrence: parsed.recurrence,
       tags: parsed.tags,
       links: parsed.links,
-      project: defaultProjectId || null,
+      project: projectId,
+      parent: defaultParentId || null,
       createdAt: new Date().toISOString(),
       order: this.todos.length,
     };
@@ -504,9 +512,37 @@ class WakeStore {
   }
 
   async remove(id) {
+    // Orphan any children — they're independent tasks, not destroyed with the parent.
+    for (const t of this.todos) if (t.parent === id) t.parent = null;
     this.todos = this.todos.filter(t => t.id !== id);
     this.todos.forEach((t, i) => t.order = i);
     await this.commit();
+  }
+
+  // Set a task's parent. Returns true on success, false on no-op or invalid op.
+  // Enforces a 1-level hierarchy: parent can't itself be a subtask, and a task
+  // with children can't be demoted into a subtask.
+  async setParent(childId, parentId) {
+    const t = this.byId(childId);
+    if (!t) return false;
+    if (parentId === childId) return false;
+    if (parentId) {
+      const parent = this.byId(parentId);
+      if (!parent) return false;
+      // 1-level depth: if the target is already a subtask, attach as sibling instead.
+      if (parent.parent) parentId = parent.parent;
+      // Can't demote a task that already has its own children.
+      const hasChildren = this.todos.some(c => c.parent === childId);
+      if (hasChildren) return false;
+    }
+    if ((t.parent || null) === (parentId || null)) return false;
+    t.parent = parentId || null;
+    await this.commit();
+    return true;
+  }
+
+  childrenOf(parentId) {
+    return this.todos.filter(t => t.parent === parentId);
   }
 
   async move(id, direction) {
@@ -663,7 +699,7 @@ class WakeStore {
 // View: filter + group
 // ============================================================
 
-function applyView(todos, view, search, showCompleted) {
+function applyView(todos, view, search, showCompleted, store) {
   let result = todos.slice();
 
   const isLogbook = view.kind === 'logbook';
@@ -692,9 +728,56 @@ function applyView(todos, view, search, showCompleted) {
 
   if (search) {
     const q = search.toLowerCase();
-    result = result.filter(t => (t.text || '').toLowerCase().includes(q));
+    result = result.filter(t => {
+      if ((t.text || '').toLowerCase().includes(q)) return true;
+      if ((t.description || '').toLowerCase().includes(q)) return true;
+      if ((t.tags || []).some(tag => tag.toLowerCase().includes(q))) return true;
+      if ((t.links || []).some(l => l.toLowerCase().includes(q))) return true;
+      if (t.project && store) {
+        const p = store.projectById(t.project);
+        if (p && p.name.toLowerCase().includes(q)) return true;
+      }
+      return false;
+    });
   }
   return result;
+}
+
+// Splits the visible set into roots (no visible parent) and children (parent
+// is also visible). A task whose parent isn't in `visible` is treated as a
+// root in this view — useful when, e.g., a child due today appears in Today
+// while its parent doesn't.
+function partitionForHierarchy(visible) {
+  const visibleIds = new Set(visible.map(t => t.id));
+  const childrenByParent = new Map();
+  const roots = [];
+  for (const t of visible) {
+    if (t.parent && visibleIds.has(t.parent)) {
+      if (!childrenByParent.has(t.parent)) childrenByParent.set(t.parent, []);
+      childrenByParent.get(t.parent).push(t);
+    } else {
+      roots.push(t);
+    }
+  }
+  return { roots, childrenByParent };
+}
+
+// Render `text` into `el`, wrapping any case-insensitive matches of `query` in
+// a <span class="wk-search-hl">. Used for live search highlighting in rows.
+function highlightInto(el, text, query) {
+  el.empty();
+  if (!query) { el.appendText(text || ''); return; }
+  const t = text || '';
+  const lower = t.toLowerCase();
+  const q = query.toLowerCase();
+  let i = 0;
+  while (i < t.length) {
+    const idx = lower.indexOf(q, i);
+    if (idx === -1) { el.appendText(t.slice(i)); return; }
+    if (idx > i) el.appendText(t.slice(i, idx));
+    el.createSpan({ cls: 'wk-search-hl', text: t.slice(idx, idx + q.length) });
+    i = idx + q.length;
+  }
 }
 
 function viewLabel(view, store) {
@@ -807,6 +890,27 @@ function renderSidebar(sidebar, state, store, h) {
   addBtn.setAttribute('title', 'New project');
   addBtn.addEventListener('click', e => { e.stopPropagation(); h.onNewProject(); });
 
+  // A small helper to wire drag-drop reassignment to a sidebar item.
+  const wireProjectDrop = (item, projectId) => {
+    item.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('text/wake-id')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      item.classList.add('wk-side-item-drop-target');
+    });
+    item.addEventListener('dragleave', e => {
+      if (!item.contains(e.relatedTarget)) item.classList.remove('wk-side-item-drop-target');
+    });
+    item.addEventListener('drop', e => {
+      item.classList.remove('wk-side-item-drop-target');
+      const draggedId = e.dataTransfer.getData('text/wake-id');
+      if (!draggedId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      h.onDropOnProject(draggedId, projectId);
+    });
+  };
+
   // Inbox (no project)
   const inboxItem = sidebar.createDiv('wk-side-item');
   if (state.activeView.kind === 'inbox') inboxItem.addClass('wk-side-item-active');
@@ -815,6 +919,7 @@ function renderSidebar(sidebar, state, store, h) {
   const inboxCount = store.todos.filter(t => !t.completed && !t.project).length;
   if (inboxCount > 0) inboxItem.createSpan({ cls: 'wk-side-count', text: String(inboxCount) });
   inboxItem.addEventListener('click', () => h.onSelectView({ kind: 'inbox' }));
+  wireProjectDrop(inboxItem, null);
 
   for (const p of store.allProjects()) {
     const item = sidebar.createDiv('wk-side-item');
@@ -829,6 +934,7 @@ function renderSidebar(sidebar, state, store, h) {
       e.stopPropagation();
       h.onContextProject(e, p.id);
     });
+    wireProjectDrop(item, p.id);
   }
 
   if (state.showArchivedProjects) {
@@ -880,12 +986,17 @@ function countForSmart(kind, todos) {
   return 0;
 }
 
-function renderRow(body, t, state, store, h) {
+function renderRow(body, t, state, store, h, opts) {
+  opts = opts || {};
   const row = body.createDiv('wk-row');
   row.dataset.todoId = t.id;
   if (state.selected.has(t.id)) row.addClass('wk-selected');
   if (state.cursor === t.id) row.addClass('wk-cursor');
   if (t.completed) row.addClass('wk-done');
+  if (opts.isSubtask) row.addClass('wk-row-subtask');
+
+  // Drag handle — only the visual cue; the whole row is draggable.
+  row.draggable = true;
 
   const check = row.createDiv('wk-check');
   if (t.completed) check.addClass('wk-check-done');
@@ -899,10 +1010,19 @@ function renderRow(body, t, state, store, h) {
     pri.setText('-');
   }
 
-  row.createSpan({ cls: 'wk-cell-text', text: t.text });
+  const textCell = row.createSpan({ cls: 'wk-cell-text' });
+  if (state.search) highlightInto(textCell, t.text, state.search);
+  else textCell.setText(t.text);
 
   const meta = row.createSpan('wk-row-meta');
   const { groupBy } = resolveGrouping(state.activeView, state);
+  // Subtask progress chip on parent rows.
+  if (opts.childrenStats) {
+    const stats = opts.childrenStats;
+    const chip = meta.createSpan({ cls: 'wk-subtask-progress' });
+    chip.setText(`${stats.done}/${stats.total}`);
+    chip.setAttribute('title', `${stats.done} of ${stats.total} subtasks complete`);
+  }
   if (t.project && groupBy !== 'project') {
     const p = store.projectById(t.project);
     if (p) {
@@ -954,6 +1074,32 @@ function renderRow(body, t, state, store, h) {
     e.preventDefault();
     e.stopPropagation();
     h.onContextRow(e, t.id);
+  });
+
+  // Drag & drop — drop a row onto another row to make it a subtask.
+  row.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/wake-id', t.id);
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('wk-row-dragging');
+  });
+  row.addEventListener('dragend', () => row.classList.remove('wk-row-dragging'));
+  row.addEventListener('dragover', e => {
+    if (!e.dataTransfer.types.includes('text/wake-id')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    row.classList.add('wk-row-drop-target');
+  });
+  row.addEventListener('dragleave', e => {
+    // Only remove if the cursor actually left the row, not when it hits a child element.
+    if (!row.contains(e.relatedTarget)) row.classList.remove('wk-row-drop-target');
+  });
+  row.addEventListener('drop', e => {
+    row.classList.remove('wk-row-drop-target');
+    const draggedId = e.dataTransfer.getData('text/wake-id');
+    if (!draggedId || draggedId === t.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    h.onDropOnRow(draggedId, t.id);
   });
 }
 
@@ -1148,6 +1294,50 @@ function renderDetail(body, t, state, store, h) {
     }
   });
 
+  // ---- Subtasks ----
+  // Hide the section entirely when this task is itself a subtask (1-level
+  // hierarchy means subtasks can't have their own subtasks).
+  if (!t.parent) {
+    const subSection = detail.createDiv('wk-detail-section');
+    subSection.createDiv({ cls: 'wk-detail-label', text: 'Subtasks' });
+    const subList = subSection.createDiv('wk-detail-subtasks');
+    const kids = store.childrenOf(t.id).slice().sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
+    if (kids.length === 0) {
+      subList.createDiv({ cls: 'wk-detail-subtasks-empty', text: 'No subtasks yet.' });
+    }
+    for (const child of kids) {
+      const item = subList.createDiv('wk-detail-subtask');
+      if (child.completed) item.addClass('wk-detail-subtask-done');
+      const cb = item.createDiv('wk-check');
+      if (child.completed) cb.addClass('wk-check-done');
+      cb.addEventListener('click', e => { e.stopPropagation(); h.onToggle(child.id); });
+      const txt = item.createSpan({ cls: 'wk-detail-subtask-text', text: child.text });
+      txt.addEventListener('click', () => h.onJumpToSubtask(child.id));
+      const x = item.createSpan({ cls: 'wk-detail-chip-x', text: 'x' });
+      x.setAttribute('title', 'Detach (make root task)');
+      x.addEventListener('click', e => {
+        e.stopPropagation();
+        h.onUnsetParent(child.id);
+      });
+    }
+    const addInput = subSection.createEl('input', { cls: 'wk-detail-chip-input wk-detail-subtask-input', type: 'text' });
+    addInput.placeholder = '+ Add subtask (Enter)';
+    addInput.addEventListener('keydown', e => {
+      stop(e);
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = addInput.value.trim();
+        if (val) {
+          h.onAddSubtask(t.id, val);
+          addInput.value = '';
+        }
+      }
+    });
+  }
+
   // ---- Read-only metadata ----
   const metaSection = detail.createDiv('wk-detail-section wk-detail-meta');
   if (t.createdAt) {
@@ -1190,7 +1380,10 @@ function renderBody(body, visible, state, store, h) {
     return;
   }
   const { groupBy, sortBy } = resolveGrouping(state.activeView, state);
-  const groups = groupTodos(visible, groupBy, store);
+  // Partition into roots/children — children are rendered indented under their
+  // visible parent rather than as separate group members.
+  const { roots, childrenByParent } = partitionForHierarchy(visible);
+  const groups = groupTodos(roots, groupBy, store);
   sortInGroups(groups, sortBy, groupBy);
   for (const [name, todos] of groups) {
     const isCollapsed = state.collapsedGroups.has(name);
@@ -1207,8 +1400,23 @@ function renderBody(body, visible, state, store, h) {
     });
     if (isCollapsed) continue;
     for (const t of todos) {
-      renderRow(body, t, state, store, h);
+      const kids = childrenByParent.get(t.id) || [];
+      // Sort children: incomplete first, then by recency of completion.
+      kids.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        if (a.completed) return (b.completionDate ?? '').localeCompare(a.completionDate ?? '');
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
+      const stats = kids.length ? {
+        done: kids.filter(c => c.completed).length,
+        total: kids.length,
+      } : null;
+      renderRow(body, t, state, store, h, { childrenStats: stats });
       if (state.expandedId === t.id) renderDetail(body, t, state, store, h);
+      for (const child of kids) {
+        renderRow(body, child, state, store, h, { isSubtask: true });
+        if (state.expandedId === child.id) renderDetail(body, child, state, store, h);
+      }
     }
   }
 }
@@ -1246,12 +1454,65 @@ function renderStatusBar(sb, state, store, visible) {
 }
 
 function renderView(refs, state, store, h) {
-  const visible = applyView(store.all(), state.activeView, state.search, state.showCompleted);
+  const visible = applyView(store.all(), state.activeView, state.search, state.showCompleted, store);
   renderToolbar(refs.toolbar, state, store, h);
   renderSidebar(refs.sidebar, state, store, h);
   renderBody(refs.body, visible, state, store, h);
+  if (refs.bulkbar) renderBulkBar(refs.bulkbar, state, store, h);
   renderStatusBar(refs.statusbar, state, store, visible);
   return visible;
+}
+
+function renderBulkBar(bar, state, store, h) {
+  bar.empty();
+  if (state.selected.size <= 1) {
+    bar.removeClass('wk-bulkbar-active');
+    return;
+  }
+  bar.addClass('wk-bulkbar-active');
+
+  bar.createSpan({ cls: 'wk-bulkbar-count', text: `${state.selected.size} selected` });
+
+  const sep = () => bar.createSpan({ cls: 'wk-bulkbar-sep', text: '·' });
+
+  sep();
+  const completeBtn = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Toggle complete' });
+  completeBtn.addEventListener('click', () => h.onBulkComplete());
+
+  sep();
+  bar.createSpan({ cls: 'wk-bulkbar-label', text: 'Priority' });
+  const priWrap = bar.createSpan('wk-bulkbar-pri');
+  for (const p of [1, 2, 3, 4]) {
+    const pill = priWrap.createSpan({ cls: `wk-bulkbar-pri-pill wk-pri-${p}`, text: `P${p}` });
+    pill.addEventListener('click', () => h.onBulkPriority(p));
+  }
+  const priClear = priWrap.createSpan({ cls: 'wk-bulkbar-pri-pill wk-bulkbar-pri-clear', text: '-' });
+  priClear.setAttribute('title', 'Clear priority');
+  priClear.addEventListener('click', () => h.onBulkPriority(null));
+
+  sep();
+  bar.createSpan({ cls: 'wk-bulkbar-label', text: 'Due' });
+  const todayBtn = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Today' });
+  todayBtn.addEventListener('click', () => h.onBulkDue(today()));
+  const tmrwBtn = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Tomorrow' });
+  tmrwBtn.addEventListener('click', () => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    h.onBulkDue(fmtDate(d));
+  });
+  const dueClear = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Clear' });
+  dueClear.addEventListener('click', () => h.onBulkDue(null));
+
+  sep();
+  const moveBtn = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Move to...' });
+  moveBtn.addEventListener('click', e => h.onBulkMoveMenu(e));
+
+  const spacer = bar.createDiv('wk-spacer');
+
+  const deleteBtn = bar.createSpan({ cls: 'wk-bulkbar-btn wk-bulkbar-btn-danger', text: 'Delete' });
+  deleteBtn.addEventListener('click', () => h.onBulkDelete());
+
+  const closeBtn = bar.createSpan({ cls: 'wk-bulkbar-btn', text: 'Clear selection' });
+  closeBtn.addEventListener('click', () => h.onBulkClear());
 }
 
 // ============================================================
@@ -1673,6 +1934,87 @@ class RenameProjectModal extends Modal {
 }
 
 // ============================================================
+// Keyboard help modal — invoked via "?"
+// ============================================================
+
+class KeyboardHelpModal extends Modal {
+  onOpen() {
+    this.modalEl.addClass('wk-help-modal');
+    this.contentEl.empty();
+
+    const header = this.contentEl.createDiv('wk-qa-header');
+    header.createDiv({ cls: 'wk-qa-title', text: 'Keyboard shortcuts' });
+    header.createDiv({ cls: 'wk-qa-subtitle', text: 'Press ? again to dismiss.' });
+
+    // [section, [[keys, description], ...]]
+    // `keys` is a space-separated list; each token becomes a styled <kbd>.
+    const sections = [
+      ['Navigation', [
+        ['j', 'Move cursor down'],
+        ['k', 'Move cursor up'],
+        ['/', 'Focus search'],
+        ['?', 'Show this help'],
+      ]],
+      ['Tasks', [
+        ['x', 'Toggle complete'],
+        ['e', 'Edit task inline'],
+        ['Space', 'Toggle detail pane'],
+        ['Enter', 'Open linked note'],
+        ['1 2 3 4', 'Set priority P1–P4'],
+        ['Tab', 'Indent (make subtask)'],
+        ['Shift+Tab', 'Outdent (promote to root)'],
+        ['Backspace', 'Delete'],
+        ['z', 'Undo last change'],
+      ]],
+      ['Selection', [
+        ['Click', 'Select + open detail'],
+        ['Shift+Click', 'Range select'],
+        [`${MOD}+Click`, 'Toggle selection'],
+        [`${MOD}+A`, 'Select all visible'],
+        ['Escape', 'Clear selection / close detail'],
+      ]],
+      ['Reorder', [
+        ['Shift+J', 'Move down'],
+        ['Shift+K', 'Move up'],
+        ['Drag→Row', 'Make subtask of target'],
+        ['Drag→Project', 'Reassign project'],
+      ]],
+      ['Modals', [
+        [`${MOD}+Shift+T`, 'Quick add task'],
+        [`${MOD}+K`, 'Command palette'],
+      ]],
+    ];
+
+    const grid = this.contentEl.createDiv('wk-help-grid');
+    for (const [section, items] of sections) {
+      const col = grid.createDiv('wk-help-col');
+      col.createDiv({ cls: 'wk-help-section-title', text: section });
+      for (const [keys, label] of items) {
+        const row = col.createDiv('wk-help-row');
+        const kbds = row.createDiv('wk-help-kbds');
+        // Render each `+`-joined chord as one <kbd>; multiple chords separated by spaces.
+        for (const chord of keys.split(' ')) {
+          kbds.createSpan({ cls: 'wk-kbd wk-kbd-help', text: chord });
+        }
+        row.createDiv({ cls: 'wk-help-label', text: label });
+      }
+    }
+
+    const actions = this.contentEl.createDiv('wk-qa-actions');
+    actions.createDiv('wk-spacer');
+    const closeBtn = actions.createEl('button', { cls: 'wk-qa-btn wk-qa-btn-secondary', text: 'Close' });
+    closeBtn.addEventListener('click', () => this.close());
+
+    this.modalEl.addEventListener('keydown', e => {
+      if (e.key === '?' || e.key === 'Escape') {
+        e.preventDefault();
+        this.close();
+      }
+    });
+  }
+}
+
+// ============================================================
 // Settings tab
 // ============================================================
 
@@ -1887,6 +2229,7 @@ class WakeView extends ItemView {
     const content = root.createDiv('wk-content');
     this.refs.sidebar = content.createDiv('wk-sidebar');
     this.refs.body = content.createDiv('wk-main');
+    this.refs.bulkbar = root.createDiv('wk-bulkbar');
     this.refs.statusbar = root.createDiv('wk-statusbar');
     this.toastEl = root.createDiv('wk-toast-stack');
 
@@ -1942,6 +2285,17 @@ class WakeView extends ItemView {
       onContextRow:     (e, id) => this.openRowContextMenu(e, id),
       onContextProject: (e, pid) => this.openProjectContextMenu(e, pid),
       onContextGroup:   (e, name) => this.openGroupContextMenu(e, name),
+      onAddSubtask:     (parentId, text) => this.addSubtask(parentId, text),
+      onUnsetParent:    id => this.unsetParent(id),
+      onJumpToSubtask:  id => this.jumpToTask(id),
+      onDropOnRow:      (draggedId, targetId) => this.handleDropOnRow(draggedId, targetId),
+      onDropOnProject:  (draggedId, projectId) => this.handleDropOnProject(draggedId, projectId),
+      onBulkPriority:   p => this.setPrioritySelected(p),
+      onBulkDue:        d => this.setDueSelected(d),
+      onBulkComplete:   () => this.toggleSelected(),
+      onBulkDelete:     () => this.deleteSelected(),
+      onBulkClear:      () => this.clearSelection(),
+      onBulkMoveMenu:   e => this.openBulkMoveMenu(e),
     });
     if (visible.length > 0 && (!this.state.cursor || !visible.find(t => t.id === this.state.cursor))) {
       this.state.cursor = visible[0].id;
@@ -1963,7 +2317,7 @@ class WakeView extends ItemView {
     }
   }
 
-  getVisible() { return applyView(this.plugin.store.all(), this.state.activeView, this.state.search, this.state.showCompleted); }
+  getVisible() { return applyView(this.plugin.store.all(), this.state.activeView, this.state.search, this.state.showCompleted, this.plugin.store); }
   getTodo(id)  { return this.plugin.store.byId(id); }
   getProjects(){ return this.plugin.store.allProjects(); }
 
@@ -2104,6 +2458,12 @@ class WakeView extends ItemView {
         menu.addItem(item => item.setTitle('Open linked note').onClick(() => this.openRef(id)));
       }
       menu.addItem(item => item.setTitle('Duplicate').onClick(() => this.duplicateTask(id)));
+      // Subtask actions
+      if (!t.parent) {
+        menu.addItem(item => item.setTitle('Add subtask...').onClick(() => this.openDetailForSubtaskAdd(id)));
+      } else {
+        menu.addItem(item => item.setTitle('Detach (make root task)').onClick(() => this.unsetParent(id)));
+      }
     }
 
     menu.addSeparator();
@@ -2429,6 +2789,9 @@ class WakeView extends ItemView {
     // Deletion removes the task entirely. Completed tasks are kept in the logbook;
     // hitting Delete on a completed task will still remove it (user explicit action).
     for (const id of ids) await this.plugin.store.remove(id);
+    if (this.state.expandedId && ids.includes(this.state.expandedId)) {
+      this.state.expandedId = null;
+    }
     this.state.selected.clear();
     this.toast(`Deleted ${ids.length}`);
   }
@@ -2502,6 +2865,9 @@ class WakeView extends ItemView {
     input.type = 'text';
     input.className = 'wk-cell-text wk-cell-text-editing';
     input.value = orig;
+    // Prevent the parent row's draggable=true from initiating a drag while
+    // the user is interacting with the inline-edit input.
+    input.draggable = false;
     cell.replaceWith(input);
     attachNoteSuggest(this.app, input, 'inline');
     input.focus();
@@ -2573,12 +2939,121 @@ class WakeView extends ItemView {
     }
   }
 
+  // ---- Subtask actions ----
+
+  async addSubtask(parentId, rawText) {
+    const t = await this.plugin.store.add(rawText, null, parentId);
+    if (t) this.toast(`Added subtask: ${t.text}`);
+  }
+
+  // Opens the detail pane for `parentId` and focuses the "+ Add subtask" input.
+  // Used by the right-click menu so users can immediately type the subtask name.
+  openDetailForSubtaskAdd(parentId) {
+    this.state.expandedId = parentId;
+    this.state.cursor = parentId;
+    this.render();
+    setTimeout(() => {
+      const input = this.refs.body.querySelector('.wk-detail-subtask-input');
+      if (input) { input.focus(); input.scrollIntoView({ block: 'center' }); }
+    }, 50);
+  }
+
+  async unsetParent(childId) {
+    const t = this.getTodo(childId);
+    if (!t) return;
+    this.undoStack.push({ todoId: childId, prev: { parent: t.parent } });
+    const ok = await this.plugin.store.setParent(childId, null);
+    if (ok) this.toast('Detached subtask', true);
+  }
+
+  jumpToTask(id) {
+    this.state.cursor = id;
+    this.state.expandedId = id;
+    this.state.selected = new Set([id]);
+    this.render();
+    const row = this.refs.body.querySelector(`[data-todo-id="${CSS.escape(id)}"]`);
+    row?.scrollIntoView({ block: 'center' });
+  }
+
+  async indentCursor() {
+    if (!this.state.cursor) return;
+    const visible = this.getVisible();
+    const idx = visible.findIndex(t => t.id === this.state.cursor);
+    if (idx <= 0) return;
+    const t = visible[idx];
+    const prev = visible[idx - 1];
+    // Pick a parent: the previous task, or its parent if it's already a subtask.
+    const newParentId = prev.parent || prev.id;
+    if (newParentId === t.id) return;
+    this.undoStack.push({ todoId: t.id, prev: { parent: t.parent } });
+    const ok = await this.plugin.store.setParent(t.id, newParentId);
+    if (ok) this.toast('Made subtask', true);
+    else new Notice('Cannot nest: this task already has subtasks of its own.');
+  }
+
+  async outdentCursor() {
+    if (!this.state.cursor) return;
+    const t = this.getTodo(this.state.cursor);
+    if (!t || !t.parent) return;
+    this.undoStack.push({ todoId: t.id, prev: { parent: t.parent } });
+    await this.plugin.store.setParent(t.id, null);
+    this.toast('Promoted to root task', true);
+  }
+
+  // ---- Drag-and-drop landings ----
+
+  async handleDropOnRow(draggedId, targetId) {
+    const dragged = this.getTodo(draggedId);
+    const target = this.getTodo(targetId);
+    if (!dragged || !target) return;
+    // If the dragged task is the parent of target, refuse (would create a cycle).
+    if (target.parent === draggedId) {
+      new Notice('Cannot drop a parent onto its own subtask.');
+      return;
+    }
+    this.undoStack.push({ todoId: dragged.id, prev: { parent: dragged.parent } });
+    const ok = await this.plugin.store.setParent(draggedId, targetId);
+    if (ok) this.toast(`Made subtask of "${target.text}"`, true);
+    else new Notice('Cannot nest: that task already has its own subtasks.');
+  }
+
+  async handleDropOnProject(draggedId, projectId) {
+    const t = this.getTodo(draggedId);
+    if (!t) return;
+    if ((t.project || null) === (projectId || null)) return;
+    this.undoStack.push({ todoId: draggedId, prev: { project: t.project } });
+    await this.plugin.store.moveToProject(draggedId, projectId);
+    const projName = projectId ? (this.plugin.store.projectById(projectId)?.name || 'project') : 'Inbox';
+    this.toast(`Moved to ${projName}`, true);
+  }
+
+  clearSelection() {
+    this.state.selected.clear();
+    this.render();
+  }
+
+  openBulkMoveMenu(e) {
+    const menu = new Menu();
+    menu.addItem(item => item
+      .setTitle('Inbox (no project)')
+      .onClick(() => this.moveSelectedToProject(null)));
+    const projects = this.plugin.store.allProjects();
+    if (projects.length > 0) menu.addSeparator();
+    for (const p of projects) {
+      menu.addItem(item => item
+        .setTitle(p.name)
+        .onClick(() => this.moveSelectedToProject(p.id)));
+    }
+    menu.showAtMouseEvent(e);
+  }
+
   collapseAllGroups() {
     const visible = applyView(
       this.plugin.store.all(),
       this.state.activeView,
       this.state.search,
       this.state.showCompleted,
+      this.plugin.store,
     );
     const { groupBy } = resolveGrouping(this.state.activeView, this.state);
     const groups = groupTodos(visible, groupBy, this.plugin.store);
@@ -2656,6 +3131,19 @@ class WakeView extends ItemView {
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
       e.preventDefault();
       this.openQuickAdd();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) this.outdentCursor();
+      else this.indentCursor();
+      return;
+    }
+
+    if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      new KeyboardHelpModal(this.app).open();
       return;
     }
 
@@ -2817,6 +3305,19 @@ class WakePlugin extends Plugin {
       if (!Array.isArray(t.tags)) t.tags = [];
       if (!Array.isArray(t.links)) t.links = [];
       if (typeof t.description !== 'string') t.description = '';
+      // v0.7: parent field for subtasks. Default to null.
+      if (typeof t.parent !== 'string') t.parent = null;
+    }
+    // v0.7: enforce 1-level hierarchy in case a hand-edited data file has nesting.
+    const ids = new Set(this.data.todos.map(t => t.id));
+    for (const t of this.data.todos) {
+      if (t.parent && !ids.has(t.parent)) t.parent = null;
+    }
+    for (const t of this.data.todos) {
+      if (t.parent) {
+        const p = this.data.todos.find(x => x.id === t.parent);
+        if (p && p.parent) t.parent = p.parent;
+      }
     }
   }
 
