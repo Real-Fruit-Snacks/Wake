@@ -1217,8 +1217,9 @@
   gap: 8px;
   padding: 6px 12px;
   background: var(--wk-bg-elev, var(--background-secondary));
+  /* Top border separates from the body; the status bar's own top border
+     handles the bottom edge — adding one here would render a double line. */
   border-top: 1px solid var(--wk-border);
-  border-bottom: 1px solid var(--wk-border);
   font-size: 12px;
   flex-wrap: wrap;
   flex-shrink: 0;

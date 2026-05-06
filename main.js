@@ -592,6 +592,20 @@ class WakeStore {
       due: nextDate,
       createdAt: new Date().toISOString(),
     };
+    // Re-arm subtasks for the next occurrence: re-parent them to the new
+    // instance and reset any completion. The completed parent in the logbook
+    // is itself the record of "this occurrence is done"; we don't need to
+    // freeze the subtask snapshot under it (which would leave a half-completed
+    // mess across views).
+    for (const child of this.todos) {
+      if (child.parent === id) {
+        child.parent = next.id;
+        if (child.completed) {
+          child.completed = false;
+          child.completionDate = undefined;
+        }
+      }
+    }
     const idx = this.todos.findIndex(x => x.id === id);
     this.todos.splice(idx + 1, 0, next);
     this.todos.forEach((x, i) => x.order = i);
@@ -726,8 +740,10 @@ function applyView(todos, view, search, showCompleted, store) {
   if (view.kind === 'project')  result = result.filter(t => t.project === view.ref);
   if (view.kind === 'tag')      result = result.filter(t => (t.tags || []).includes(view.ref));
 
-  if (search) {
-    const q = search.toLowerCase();
+  // Trim before applying — a query of "   " would otherwise match every task
+  // that contains three consecutive spaces (so, almost everything).
+  const q = (search || '').trim().toLowerCase();
+  if (q) {
     result = result.filter(t => {
       if ((t.text || '').toLowerCase().includes(q)) return true;
       if ((t.description || '').toLowerCase().includes(q)) return true;
@@ -1011,7 +1027,8 @@ function renderRow(body, t, state, store, h, opts) {
   }
 
   const textCell = row.createSpan({ cls: 'wk-cell-text' });
-  if (state.search) highlightInto(textCell, t.text, state.search);
+  const trimmedSearch = (state.search || '').trim();
+  if (trimmedSearch) highlightInto(textCell, t.text, trimmedSearch);
   else textCell.setText(t.text);
 
   const meta = row.createSpan('wk-row-meta');
@@ -1023,7 +1040,14 @@ function renderRow(body, t, state, store, h, opts) {
     chip.setText(`${stats.done}/${stats.total}`);
     chip.setAttribute('title', `${stats.done} of ${stats.total} subtasks complete`);
   }
-  if (t.project && groupBy !== 'project') {
+  // Project chip: usually hidden when grouping by project (the group label is
+  // the project), but always shown on a subtask whose project differs from its
+  // visible parent — otherwise the user has no signal that the indented task
+  // doesn't belong to the surrounding parent's project.
+  const showProjectChip = t.project && (
+    groupBy !== 'project' || opts.parentProjectMismatch
+  );
+  if (showProjectChip) {
     const p = store.projectById(t.project);
     if (p) {
       const chip = meta.createSpan('wk-proj-chip');
@@ -1325,6 +1349,7 @@ function renderDetail(body, t, state, store, h) {
     }
     const addInput = subSection.createEl('input', { cls: 'wk-detail-chip-input wk-detail-subtask-input', type: 'text' });
     addInput.placeholder = '+ Add subtask (Enter)';
+    attachNoteSuggest(store.plugin.app, addInput, 'inline');
     addInput.addEventListener('keydown', e => {
       stop(e);
       if (e.key === 'Enter') {
@@ -1414,7 +1439,8 @@ function renderBody(body, visible, state, store, h) {
       renderRow(body, t, state, store, h, { childrenStats: stats });
       if (state.expandedId === t.id) renderDetail(body, t, state, store, h);
       for (const child of kids) {
-        renderRow(body, child, state, store, h, { isSubtask: true });
+        const parentProjectMismatch = (child.project || null) !== (t.project || null);
+        renderRow(body, child, state, store, h, { isSubtask: true, parentProjectMismatch });
         if (state.expandedId === child.id) renderDetail(body, child, state, store, h);
       }
     }
@@ -2960,10 +2986,13 @@ class WakeView extends ItemView {
 
   async unsetParent(childId) {
     const t = this.getTodo(childId);
-    if (!t) return;
-    this.undoStack.push({ todoId: childId, prev: { parent: t.parent } });
+    if (!t || !t.parent) return;
+    const prev = t.parent;
     const ok = await this.plugin.store.setParent(childId, null);
-    if (ok) this.toast('Detached subtask', true);
+    if (ok) {
+      this.undoStack.push({ todoId: childId, prev: { parent: prev } });
+      this.toast('Detached subtask', true);
+    }
   }
 
   jumpToTask(id) {
@@ -2985,19 +3014,29 @@ class WakeView extends ItemView {
     // Pick a parent: the previous task, or its parent if it's already a subtask.
     const newParentId = prev.parent || prev.id;
     if (newParentId === t.id) return;
-    this.undoStack.push({ todoId: t.id, prev: { parent: t.parent } });
+    if ((t.parent || null) === newParentId) return; // already there — silent no-op
+    if (this.plugin.store.childrenOf(t.id).length > 0) {
+      new Notice('Cannot nest: this task already has subtasks of its own.');
+      return;
+    }
+    const prevParent = t.parent;
     const ok = await this.plugin.store.setParent(t.id, newParentId);
-    if (ok) this.toast('Made subtask', true);
-    else new Notice('Cannot nest: this task already has subtasks of its own.');
+    if (ok) {
+      this.undoStack.push({ todoId: t.id, prev: { parent: prevParent } });
+      this.toast('Made subtask', true);
+    }
   }
 
   async outdentCursor() {
     if (!this.state.cursor) return;
     const t = this.getTodo(this.state.cursor);
     if (!t || !t.parent) return;
-    this.undoStack.push({ todoId: t.id, prev: { parent: t.parent } });
-    await this.plugin.store.setParent(t.id, null);
-    this.toast('Promoted to root task', true);
+    const prevParent = t.parent;
+    const ok = await this.plugin.store.setParent(t.id, null);
+    if (ok) {
+      this.undoStack.push({ todoId: t.id, prev: { parent: prevParent } });
+      this.toast('Promoted to root task', true);
+    }
   }
 
   // ---- Drag-and-drop landings ----
@@ -3006,15 +3045,26 @@ class WakeView extends ItemView {
     const dragged = this.getTodo(draggedId);
     const target = this.getTodo(targetId);
     if (!dragged || !target) return;
+    if (dragged.id === target.id) return; // self-drop — silent
     // If the dragged task is the parent of target, refuse (would create a cycle).
     if (target.parent === draggedId) {
       new Notice('Cannot drop a parent onto its own subtask.');
       return;
     }
-    this.undoStack.push({ todoId: dragged.id, prev: { parent: dragged.parent } });
+    // 1-level rule: target's effective parent is target itself, or target.parent
+    // if target is already a subtask. Same-effective-parent drop is a silent no-op.
+    const effectiveParentId = target.parent || target.id;
+    if ((dragged.parent || null) === effectiveParentId) return;
+    if (this.plugin.store.childrenOf(dragged.id).length > 0) {
+      new Notice('Cannot nest: this task already has its own subtasks.');
+      return;
+    }
+    const prevParent = dragged.parent;
     const ok = await this.plugin.store.setParent(draggedId, targetId);
-    if (ok) this.toast(`Made subtask of "${target.text}"`, true);
-    else new Notice('Cannot nest: that task already has its own subtasks.');
+    if (ok) {
+      this.undoStack.push({ todoId: dragged.id, prev: { parent: prevParent } });
+      this.toast(`Made subtask of "${target.text}"`, true);
+    }
   }
 
   async handleDropOnProject(draggedId, projectId) {
@@ -3143,6 +3193,8 @@ class WakeView extends ItemView {
 
     if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
+      // Avoid stacking modals if one is already mounted (rapid double-press).
+      if (document.querySelector('.modal.wk-help-modal')) return;
       new KeyboardHelpModal(this.app).open();
       return;
     }
@@ -3318,6 +3370,11 @@ class WakePlugin extends Plugin {
         const p = this.data.todos.find(x => x.id === t.parent);
         if (p && p.parent) t.parent = p.parent;
       }
+    }
+    // v0.7.1: defense-in-depth — flattening a 2-cycle (A.parent=B, B.parent=A)
+    // can leave A.parent=A (self-parent) after the previous pass. Strip those.
+    for (const t of this.data.todos) {
+      if (t.parent === t.id) t.parent = null;
     }
   }
 
