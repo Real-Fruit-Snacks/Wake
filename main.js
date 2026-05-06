@@ -170,6 +170,162 @@ function formatLogDate(date) {
 }
 
 // ============================================================
+// Note autocomplete
+// ============================================================
+
+// Wires note-name autocomplete to a text input or textarea.
+// `mode` controls how the query is extracted:
+//   - 'inline' (default): pops up when the cursor is inside a `[[query` pattern
+//     before the cursor; on selection, replaces the query with the note name and
+//     auto-closes the brackets.
+//   - 'whole': treats the entire input value as the query; on selection, the
+//     value is replaced by the note basename and `onCommit` is called (used by
+//     the link chip input which adds a chip immediately).
+function attachNoteSuggest(app, el, mode, onCommit) {
+  let popup = null;
+  let suggestions = [];
+  let selectedIdx = 0;
+  let queryStart = -1;
+  let queryEnd = -1;
+
+  // Find the active query context — null means no popup should show.
+  const findContext = () => {
+    if (mode === 'whole') {
+      return { start: 0, end: el.value.length, query: el.value };
+    }
+    const val = el.value;
+    const cursor = el.selectionStart ?? val.length;
+    for (let i = cursor - 1; i >= 1; i--) {
+      const c = val[i];
+      // Bail at a closing bracket or newline — we're not in a [[...]] context.
+      if (c === ']' || c === '\n') break;
+      if (c === '[' && val[i - 1] === '[') {
+        return { start: i + 1, end: cursor, query: val.slice(i + 1, cursor) };
+      }
+    }
+    return null;
+  };
+
+  const update = () => {
+    const ctx = findContext();
+    if (!ctx) { hide(); return; }
+    queryStart = ctx.start;
+    queryEnd = ctx.end;
+    const q = (ctx.query || '').toLowerCase();
+    if (mode === 'whole' && q.length === 0) { hide(); return; }
+
+    const all = app.vault.getMarkdownFiles();
+    suggestions = (q.length === 0 ? all : all.filter(f => f.basename.toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const aStart = a.basename.toLowerCase().startsWith(q);
+        const bStart = b.basename.toLowerCase().startsWith(q);
+        if (aStart !== bStart) return aStart ? -1 : 1;
+        return a.basename.localeCompare(b.basename);
+      })
+      .slice(0, 8);
+
+    if (suggestions.length === 0) { hide(); return; }
+    selectedIdx = 0;
+    show();
+  };
+
+  const show = () => {
+    if (!popup) {
+      popup = document.body.createDiv('wk-suggest-popup');
+    }
+    popup.empty();
+    suggestions.forEach((file, idx) => {
+      const item = popup.createDiv({
+        cls: 'wk-suggest-item' + (idx === selectedIdx ? ' wk-suggest-item-sel' : ''),
+      });
+      item.createDiv({ cls: 'wk-suggest-name', text: file.basename });
+      const folder = file.parent && file.parent.path && file.parent.path !== '/' ? file.parent.path : '';
+      if (folder) item.createDiv({ cls: 'wk-suggest-path', text: folder });
+      item.addEventListener('mousedown', e => {
+        // mousedown fires before blur — prevent the input from losing focus
+        // before our selection logic runs.
+        e.preventDefault();
+        select(idx);
+      });
+    });
+
+    const rect = el.getBoundingClientRect();
+    popup.style.position = 'fixed';
+    popup.style.top = (rect.bottom + 2) + 'px';
+    popup.style.left = rect.left + 'px';
+    popup.style.minWidth = Math.min(rect.width, 280) + 'px';
+    popup.style.zIndex = '1000';
+  };
+
+  const hide = () => {
+    if (popup) { popup.remove(); popup = null; }
+    suggestions = [];
+  };
+
+  const select = (idx) => {
+    const file = suggestions[idx];
+    if (!file) return;
+    const name = file.basename;
+
+    if (mode === 'whole') {
+      el.value = name;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      hide();
+      if (onCommit) onCommit(name);
+      return;
+    }
+
+    // Inline mode: replace the [[query portion with [[name]] (auto-close brackets).
+    const before = el.value.slice(0, queryStart);
+    const after = el.value.slice(queryEnd);
+    let inserted = name;
+    if (!after.startsWith(']]')) inserted += ']]';
+    el.value = before + inserted + after;
+    const newCursor = (before + inserted).length;
+    try { el.setSelectionRange(newCursor, newCursor); } catch (_) { /* noop */ }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    hide();
+  };
+
+  el.addEventListener('input', update);
+  el.addEventListener('click', update);
+  el.addEventListener('keyup', e => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) update();
+  });
+
+  // Capture phase so this fires before the element's own keydown handlers
+  // (which may e.g. insert chips on Enter).
+  el.addEventListener('keydown', e => {
+    if (!popup) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      selectedIdx = Math.min(suggestions.length - 1, selectedIdx + 1);
+      show();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      selectedIdx = Math.max(0, selectedIdx - 1);
+      show();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      select(selectedIdx);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      hide();
+    }
+  }, true);
+
+  // Hide shortly after blur so click-on-popup-item still fires.
+  el.addEventListener('blur', () => setTimeout(hide, 150));
+
+  // Hide if the input is removed from the DOM (e.g. detail pane closes).
+  return { hide };
+}
+
+// ============================================================
 // Recurrence — accepts values like "day", "week", "monday", "3-days"
 // ============================================================
 
@@ -812,6 +968,7 @@ function renderDetail(body, t, state, store, h) {
   titleSection.createDiv({ cls: 'wk-detail-label', text: 'Title' });
   const titleInput = titleSection.createEl('input', { cls: 'wk-detail-input', type: 'text' });
   titleInput.value = t.text || '';
+  attachNoteSuggest(store.plugin.app, titleInput, 'inline');
   // Defer the save so a click on an action button (Close, Mark complete, etc.)
   // can finish before the re-render destroys the click target. The textarea's blur
   // fires between mousedown and mouseup; saving immediately would otherwise eat
@@ -832,6 +989,7 @@ function renderDetail(body, t, state, store, h) {
   descArea.value = t.description || '';
   descArea.placeholder = 'Notes, context, links — anything you want to remember about this task.';
   descArea.rows = 4;
+  attachNoteSuggest(store.plugin.app, descArea, 'inline');
   // Same deferral pattern as the title input above — keeps single-click on Close
   // (or any action button) from being eaten by the re-render that follows blur.
   descArea.addEventListener('change', () => {
@@ -972,6 +1130,12 @@ function renderDetail(body, t, state, store, h) {
   }
   const linkInput = linksRow.createEl('input', { cls: 'wk-detail-chip-input', type: 'text' });
   linkInput.placeholder = '+ Note name (Enter)';
+  attachNoteSuggest(store.plugin.app, linkInput, 'whole', (name) => {
+    if (name && !(t.links || []).includes(name)) {
+      h.onUpdateField(t.id, { links: [...(t.links || []), name] });
+    }
+    linkInput.value = '';
+  });
   linkInput.addEventListener('keydown', e => {
     stop(e);
     if (e.key === 'Enter') {
@@ -1299,6 +1463,7 @@ class QuickAddModal extends Modal {
     inputWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Task' });
     const input = inputWrap.createEl('input', { cls: 'wk-qa-input', type: 'text' });
     input.placeholder = 'What needs doing?';
+    attachNoteSuggest(this.app, input, 'inline');
 
     const previewWrap = this.contentEl.createDiv('wk-qa-preview');
     previewWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Preview' });
@@ -1736,6 +1901,12 @@ class WakeView extends ItemView {
   }
 
   render() {
+    // Capture focus state before re-render — the toolbar's search input gets
+    // destroyed and recreated, which would otherwise drop focus after every keystroke.
+    const prevFocus = document.activeElement;
+    const prevWasSearch = prevFocus && prevFocus.classList && prevFocus.classList.contains('wk-search');
+    const prevCursor = prevWasSearch ? prevFocus.selectionStart : null;
+
     // Pull settings from plugin.data on each render so settings-tab changes propagate
     // even while a view is already open.
     const d = this.plugin.data;
@@ -1776,6 +1947,19 @@ class WakeView extends ItemView {
       this.state.cursor = visible[0].id;
       const row = this.refs.body.querySelector(`[data-todo-id="${CSS.escape(visible[0].id)}"]`);
       row?.classList.add('wk-cursor');
+    }
+
+    // Restore focus on the search input if it had focus before the re-render.
+    // Without this, typing in search drops focus after each keystroke because
+    // the toolbar gets fully rebuilt by renderToolbar.
+    if (prevWasSearch) {
+      const newSearch = this.refs.toolbar.querySelector('.wk-search');
+      if (newSearch) {
+        newSearch.focus();
+        if (prevCursor !== null) {
+          try { newSearch.setSelectionRange(prevCursor, prevCursor); } catch (_) { /* noop */ }
+        }
+      }
     }
   }
 
@@ -2319,6 +2503,7 @@ class WakeView extends ItemView {
     input.className = 'wk-cell-text wk-cell-text-editing';
     input.value = orig;
     cell.replaceWith(input);
+    attachNoteSuggest(this.app, input, 'inline');
     input.focus();
     input.select();
     let finished = false;

@@ -866,12 +866,66 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 32px !important;
+  padding: 10px 30px 10px 12px !important;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
                     linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) !important;
-  background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px !important;
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50% !important;
   background-size: 5px 5px !important;
   background-repeat: no-repeat !important;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================ */
+/*  Note autocomplete popup                                      */
+/* ============================================================ */
+
+.wk-suggest-popup {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  font-size: 13px;
+  min-width: 200px;
+  max-width: 360px;
+}
+.wk-suggest-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wk-suggest-item:hover {
+  background: var(--background-modifier-hover);
+}
+.wk-suggest-item-sel {
+  background: rgba(var(--interactive-accent-rgb), 0.18);
+  color: var(--interactive-accent);
+}
+.wk-suggest-item-sel:hover {
+  background: rgba(var(--interactive-accent-rgb), 0.25);
+}
+.wk-suggest-name {
+  font-weight: 500;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wk-suggest-item-sel .wk-suggest-name {
+  color: var(--interactive-accent);
+}
+.wk-suggest-path {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wk-qa-section-label {

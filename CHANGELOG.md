@@ -2,6 +2,16 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.5] - 2026-05-05
+
+### Added
+- `[[` triggers a note autocomplete popup in the new-task input, the inline edit (`e`), the title input, and the description textarea. Type `[[`, start typing the note name, pick from the dropdown — Wake inserts the name and auto-closes the brackets.
+- The "Linked notes" chip input in the detail pane now shows the same note suggestions as you type. Pick one and it's added as a chip immediately.
+
+### Fixed
+- Typing in the toolbar search no longer drops after the first letter. The toolbar gets fully rebuilt on every keystroke; focus is now captured and restored across the re-render.
+- The Project dropdown in the new-task modal no longer clips the text. Adjusted the chevron padding and centered it vertically.
+
 ## [0.6.4] - 2026-05-05
 
 ### Added
