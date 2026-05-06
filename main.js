@@ -583,11 +583,19 @@ class WakeStore {
     return t;
   }
 
-  async update(id, change) {
+  // `opts.silent` skips the listener notify (= no re-render) but still writes
+  // to disk. Use this for blur-triggered saves on the detail pane's title and
+  // description, where re-rendering between mouseup and click can destroy the
+  // Close button before the click event lands on it.
+  async update(id, change, opts) {
     const t = this.byId(id);
     if (!t) return;
     Object.assign(t, change);
-    await this.commit();
+    if (opts && opts.silent) {
+      await this.plugin.save();
+    } else {
+      await this.commit();
+    }
   }
 
   async updateFromRawText(id, rawInput) {
@@ -1250,13 +1258,16 @@ function renderDetail(body, t, state, store, h) {
   const titleInput = titleSection.createEl('input', { cls: 'wk-detail-input', type: 'text' });
   titleInput.value = t.text || '';
   attachNoteSuggest(store.plugin.app, titleInput, 'inline');
-  // Defer the save so a click on an action button (Close, Mark complete, etc.)
-  // can finish before the re-render destroys the click target. The textarea's blur
-  // fires between mousedown and mouseup; saving immediately would otherwise eat
-  // the click.
+  // Silent save (writes to disk, skips the re-render). When the user clicks an
+  // action button (Close, Mark complete, Delete) while the textarea is focused,
+  // the sequence is mousedown → blur → change → mouseup → click. A re-render
+  // triggered by `change` can destroy the button between mouseup and click,
+  // making the click land on a detached node and require a second press. Saving
+  // silently lets the click reach the live button; the close handler triggers
+  // its own render which picks up the new value from the store.
   titleInput.addEventListener('change', () => {
     const value = titleInput.value.trim() || t.text;
-    setTimeout(() => h.onUpdateField(t.id, { text: value }), 0);
+    h.onUpdateField(t.id, { text: value }, { silent: true });
   });
   titleInput.addEventListener('keydown', e => {
     stop(e);
@@ -1271,11 +1282,9 @@ function renderDetail(body, t, state, store, h) {
   descArea.placeholder = 'Notes, context, links — anything you want to remember about this task.';
   descArea.rows = 4;
   attachNoteSuggest(store.plugin.app, descArea, 'inline');
-  // Same deferral pattern as the title input above — keeps single-click on Close
-  // (or any action button) from being eaten by the re-render that follows blur.
+  // Same silent-save pattern as the title input above — see the comment there.
   descArea.addEventListener('change', () => {
-    const value = descArea.value;
-    setTimeout(() => h.onUpdateField(t.id, { description: value }), 0);
+    h.onUpdateField(t.id, { description: descArea.value }, { silent: true });
   });
   descArea.addEventListener('keydown', stop);
 
@@ -2426,7 +2435,7 @@ class WakeView extends ItemView {
       onNewProject:     () => this.openNewProject(),
       onOpenGroupMenu:  e => this.openGroupMenu(e),
       onOpenSortMenu:   e => this.openSortMenu(e),
-      onUpdateField:    (id, change) => this.plugin.store.update(id, change),
+      onUpdateField:    (id, change, opts) => this.plugin.store.update(id, change, opts),
       onOpenLinkByName: name => this.openLinkByName(name),
       onCollapseDetail: id => this.toggleDetail(id),
       onDeleteOne:      id => this.deleteOne(id),

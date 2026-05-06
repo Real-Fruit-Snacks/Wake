@@ -2,6 +2,11 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.7.4] - 2026-05-06
+
+### Fixed
+- **Close button needed two clicks after typing in the description or title** — same class of bug as v0.6.3, but the `setTimeout(0)` deferral I shipped then was racy. mousedown / mouseup / click are sometimes scheduled as separate event-loop tasks; a 0-delay setTimeout can fire *between* mouseup and click, triggering the re-render that destroys the Close button before the click event lands. The first click "flashes" (lands on a detached node), the second click works because the button is fresh again. Fixed properly now: `store.update` accepts an `opts.silent` flag that writes to disk without notifying listeners (no re-render). Title and description blur-saves use silent mode; the close click runs through cleanly and triggers its own render which picks up the new value.
+
 ## [0.7.3] - 2026-05-06
 
 ### Fixed
