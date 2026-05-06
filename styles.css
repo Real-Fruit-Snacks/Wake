@@ -888,6 +888,95 @@
 }
 
 /* ============================================================ */
+/*  Custom dropdown — replaces native <select> in modals         */
+/* ============================================================ */
+
+/* Wrap is the positioning context for the absolutely-placed menu. */
+.wk-cdd {
+  position: relative;
+  width: 100%;
+}
+.wk-cdd-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--background-primary-alt, var(--background-secondary));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  user-select: none;
+}
+.wk-cdd-button:hover {
+  border-color: var(--text-muted);
+}
+.wk-cdd-button:focus,
+.wk-cdd-button-open {
+  border-color: var(--interactive-accent) !important;
+  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15);
+}
+.wk-cdd-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wk-cdd-chevron {
+  flex-shrink: 0;
+  margin-left: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  line-height: 0;
+  transition: transform 0.12s;
+}
+.wk-cdd-button-open .wk-cdd-chevron {
+  transform: rotate(180deg);
+  color: var(--interactive-accent);
+}
+.wk-cdd-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  font-size: 14px;
+  z-index: 10;
+}
+.wk-cdd-item {
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-normal);
+}
+.wk-cdd-item:hover {
+  background: var(--background-modifier-hover);
+}
+.wk-cdd-item-sel {
+  background: rgba(var(--interactive-accent-rgb), 0.18);
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+.wk-cdd-item-sel:hover {
+  background: rgba(var(--interactive-accent-rgb), 0.25);
+}
+
+/* ============================================================ */
 /*  Note autocomplete popup                                      */
 /* ============================================================ */
 

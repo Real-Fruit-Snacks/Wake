@@ -326,6 +326,117 @@ function attachNoteSuggest(app, el, mode, onCommit) {
 }
 
 // ============================================================
+// Custom dropdown — replaces native <select> in modals
+// ============================================================
+
+// Why not native <select>? On Chromium / Electron, the displayed-value text
+// inside an `appearance: none` <select> gets truncated to a width that is
+// often much smaller than the select's content area, leaving "OSCP P…" in
+// the middle of an otherwise empty box. No combination of width / padding /
+// text-overflow on the select fixes the inner widget. So we render the
+// "selected display" as a plain div that fully honours our CSS, and pop a
+// menu of div items on click.
+//
+// `options` is `[{value: string, label: string}]`.
+// Returns an object with `.value` (get/set), `.addEventListener('change', cb)`,
+// and `.destroy()` to clean up an open menu before the parent goes away.
+function createCustomDropdown(parent, options, initialValue) {
+  const wrap = parent.createDiv('wk-cdd');
+  const button = wrap.createDiv('wk-cdd-button');
+  const labelEl = button.createSpan('wk-cdd-label');
+  const chevron = button.createDiv('wk-cdd-chevron');
+  // Inline SVG so the chevron tracks `currentColor` (theme-aware).
+  chevron.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg>';
+  button.tabIndex = 0;
+
+  let value = initialValue;
+  const listeners = [];
+
+  const setLabel = () => {
+    const opt = options.find(o => o.value === value);
+    labelEl.setText(opt ? opt.label : '(select)');
+  };
+  setLabel();
+
+  let menu = null;
+  let onDocClick = null;
+
+  const close = () => {
+    if (menu) { menu.remove(); menu = null; }
+    if (onDocClick) {
+      document.removeEventListener('mousedown', onDocClick, true);
+      onDocClick = null;
+    }
+    button.classList.remove('wk-cdd-button-open');
+  };
+
+  const open = () => {
+    if (menu) return;
+    button.classList.add('wk-cdd-button-open');
+    // Append to the wrap so the menu is removed automatically when the modal
+    // (or parent) is torn down. position: absolute relative to .wk-cdd which
+    // we position: relative in CSS.
+    menu = wrap.createDiv('wk-cdd-menu');
+    for (const opt of options) {
+      const item = menu.createDiv('wk-cdd-item');
+      if (opt.value === value) item.addClass('wk-cdd-item-sel');
+      item.createSpan({ text: opt.label });
+      // mousedown rather than click so we beat the document mousedown closer.
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const old = value;
+        value = opt.value;
+        setLabel();
+        close();
+        if (old !== value) {
+          for (const cb of listeners) cb({ value, oldValue: old });
+        }
+      });
+    }
+    onDocClick = e => {
+      if (!menu) return;
+      if (menu.contains(e.target) || button.contains(e.target)) return;
+      close();
+    };
+    // Defer registration so the click that opened us doesn't immediately close us.
+    setTimeout(() => document.addEventListener('mousedown', onDocClick, true), 0);
+  };
+
+  button.addEventListener('click', e => {
+    e.stopPropagation();
+    if (menu) close();
+    else open();
+  });
+
+  button.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (menu) close();
+      else open();
+    } else if (e.key === 'Escape' && menu) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    } else if (e.key === 'ArrowDown' && !menu) {
+      e.preventDefault();
+      open();
+    }
+  });
+
+  return {
+    el: wrap,
+    get value() { return value; },
+    set value(v) { value = v; setLabel(); },
+    addEventListener(type, cb) {
+      if (type === 'change') listeners.push(cb);
+    },
+    destroy: close,
+  };
+}
+
+// ============================================================
 // Recurrence — accepts values like "day", "week", "monday", "3-days"
 // ============================================================
 
@@ -1738,13 +1849,18 @@ class QuickAddModal extends Modal {
     // User can change it inline; the submit uses the selected value, not defaultProjectId.
     const projectWrap = this.contentEl.createDiv('wk-qa-input-wrap');
     projectWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Project' });
-    const projectSelect = projectWrap.createEl('select', { cls: 'wk-qa-input wk-qa-select' });
-    projectSelect.createEl('option', { text: 'Inbox (no project)', attr: { value: '' } });
+    // Custom dropdown: native <select> on Chromium truncates the displayed
+    // text to a small interior width even when the box is full-width.
+    const projectOptions = [{ value: '', label: 'Inbox (no project)' }];
     for (const p of this.plugin.store.allProjects()) {
-      const opt = projectSelect.createEl('option', { text: p.name, attr: { value: p.id } });
-      if (this.defaultProjectId === p.id) opt.selected = true;
+      projectOptions.push({ value: p.id, label: p.name });
     }
-    projectSelect.addEventListener('keydown', e => e.stopPropagation());
+    const projectDropdown = createCustomDropdown(
+      projectWrap,
+      projectOptions,
+      this.defaultProjectId || '',
+    );
+    this._projectDropdown = projectDropdown;
 
     const inputWrap = this.contentEl.createDiv('wk-qa-input-wrap');
     inputWrap.createDiv({ cls: 'wk-qa-section-label', text: 'Task' });
@@ -1827,7 +1943,7 @@ class QuickAddModal extends Modal {
     const submit = async () => {
       const text = input.value.trim();
       if (!text) return;
-      const projectId = projectSelect.value || null;
+      const projectId = projectDropdown.value || null;
       const t = await this.plugin.store.add(text, projectId);
       new Notice(`Added: ${t.text}`);
       this.close();
@@ -1843,6 +1959,12 @@ class QuickAddModal extends Modal {
 
     renderPreview();
     setTimeout(() => input.focus(), 50);
+  }
+
+  onClose() {
+    // Defensively close any open dropdown menu so a leftover document-level
+    // mousedown listener doesn't survive the modal.
+    if (this._projectDropdown) this._projectDropdown.destroy();
   }
 }
 

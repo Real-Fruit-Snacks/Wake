@@ -2,6 +2,14 @@
 
 All notable changes to Wake are documented in this file. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.7.3] - 2026-05-06
+
+### Fixed
+- **Project name truncation in the new-task modal** persisted on Chromium even after the v0.7.2 chevron rewrite. The native `<select>` element on Electron renders the displayed-value text inside an internal widget whose width is decoupled from the select's content area — so a project named `OSCP Path` would render as `OSCP P…` with the ellipsis falling well before the actual padding-right boundary, regardless of width / padding / `text-overflow` set on the select itself. The new-task modal now uses a custom dropdown built from regular divs (which fully honour our CSS) instead of a native `<select>`. The full project name shows in the closed state, the menu pops below on click, and items hover / select normally.
+
+### Added
+- Keyboard support on the new project dropdown: Enter / Space / ArrowDown opens the menu, Escape closes it, the button is focusable via Tab.
+
 ## [0.7.2] - 2026-05-06
 
 ### Fixed
