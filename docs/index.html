@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wake - Obsidian Plugin manual page</title>
+    <meta name="description" content="Man page for Wake, a keyboard-first task manager for Obsidian.">
+    <!-- Minimalist Monospace -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="man-page">
+        <header class="man-header">
+            <span class="left">WAKE(1)</span>
+            <span class="center">Obsidian Plugins</span>
+            <span class="right">WAKE(1)</span>
+        </header>
+
+        <section class="man-section">
+            <h2>NAME</h2>
+            <p class="indent"><strong>Wake</strong> - a keyboard-first task manager for Obsidian.</p>
+        </section>
+
+        <section class="man-section">
+            <h2>SYNOPSIS</h2>
+            <p class="indent"><strong>Obsidian Settings</strong> &gt; <strong>Community Plugins</strong> &gt; <strong>Browse</strong> &gt; <strong>Wake</strong></p>
+        </section>
+
+        <section class="man-section">
+            <h2>DESCRIPTION</h2>
+            <p class="indent">
+                <strong>Wake</strong> is a keyboard-first task manager for Obsidian that maintains a self-contained task database. Tasks live inside the plugin and reference vault notes via <code>[[Note]]</code> links. Your vault stays clean, your tasks stay searchable, and your history stays forever.
+            </p>
+            <p class="indent">
+                To wake is to surface from sleep with intent — pulled out of background noise into focus. Felt fitting for a tool whose entire job is to surface what matters today and let everything else fade.
+            </p>
+        </section>
+
+        <section class="man-section">
+            <h2>FEATURES</h2>
+            <dl class="indent options-list">
+                <dt><strong>Self-contained Storage</strong></dt>
+                <dd>Tasks are stored in <code>data.json</code> — Wake does not scan, parse, or modify your markdown notes.</dd>
+                
+                <dt><strong>Keyboard-first Navigation</strong></dt>
+                <dd>Every action has a keyboard binding. Quick-add parses metadata as you type.</dd>
+                
+                <dt><strong>Smart Lists</strong></dt>
+                <dd>Six automatic lists in the sidebar (Active, Today, Overdue, This Week, No Date, Logbook) group and sort automatically.</dd>
+
+                <dt><strong>Recurrence DSL</strong></dt>
+                <dd>Advanced recurrence engine parsing syntax like <code>every:day</code>, <code>every:week</code>, <code>every:monday</code>.</dd>
+            </dl>
+        </section>
+
+        <section class="man-section">
+            <h2>INSTALLATION</h2>
+            <div class="indent">
+                <p>To install Wake via Obsidian BRAT:</p>
+                <pre><code>Obsidian BRAT Settings > Add Beta plugin
+Enter: Real-Fruit-Snacks/Wake</code></pre>
+                <button class="man-btn copy-btn" data-clipboard="Real-Fruit-Snacks/Wake">COPY BRAT PATH</button>
+            </div>
+        </section>
+
+        <section class="man-section">
+            <h2>AUTHOR</h2>
+            <p class="indent">Written by Real-Fruit-Snacks.</p>
+        </section>
+
+        <section class="man-section">
+            <h2>SEE ALSO</h2>
+            <p class="indent">
+                <a href="https://github.com/Real-Fruit-Snacks/Wake" target="_blank">GitHub Repository</a>, 
+                <a href="https://github.com/Real-Fruit-Snacks/Wake/issues" target="_blank">Issue Tracker</a>
+            </p>
+        </section>
+        
+        <section class="man-section disclaimer">
+            <p class="indent"><em>WARNING: For educational and authorized testing purposes only.</em></p>
+        </section>
+
+        <footer class="man-footer">
+            <span class="left">Wake 0.8.0</span>
+            <span class="center">2026-06-19</span>
+            <span class="right">WAKE(1)</span>
+        </footer>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
