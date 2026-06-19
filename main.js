@@ -3463,6 +3463,39 @@ class WakePlugin extends Plugin {
       callback: () => new NewProjectModal(this.app, this).open(),
     });
 
+    this.addCommand({
+      id: 'create-todo-from-selection',
+      name: 'Create Todo from Selection',
+      editorCallback: async (editor, info) => {
+        const text = editor.getSelection().trim();
+        if (text) {
+          const noteName = info.file ? info.file.basename : '';
+          const taskText = noteName ? `${text} [[${noteName}]]` : text;
+          const t = await this.store.add(taskText, null);
+          new Notice(`Added: ${t.text}`);
+        }
+      }
+    });
+
+    this.registerEvent(
+      this.app.workspace.on('editor-menu', (menu, editor, info) => {
+        const text = editor.getSelection().trim();
+        if (text) {
+          menu.addItem((item) => {
+            item
+              .setTitle('Create Todo from Selection')
+              .setIcon('check-circle')
+              .onClick(async () => {
+                const noteName = info.file ? info.file.basename : '';
+                const taskText = noteName ? `${text} [[${noteName}]]` : text;
+                const t = await this.store.add(taskText, null);
+                new Notice(`Added: ${t.text}`);
+              });
+          });
+        }
+      })
+    );
+
     this.addSettingTab(new WakeSettingsTab(this.app, this));
   }
 
