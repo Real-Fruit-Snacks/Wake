@@ -598,6 +598,20 @@ class WakeStore {
     }
   }
 
+  async updateBulk(ids, change, opts) {
+    for (const id of ids) {
+      const t = this.byId(id);
+      if (t) {
+        Object.assign(t, change);
+      }
+    }
+    if (opts && opts.silent) {
+      await this.plugin.save();
+    } else {
+      await this.commit();
+    }
+  }
+
   async updateFromRawText(id, rawInput) {
     const t = this.byId(id);
     if (!t) return;
@@ -634,6 +648,19 @@ class WakeStore {
     // Orphan any children — they're independent tasks, not destroyed with the parent.
     for (const t of this.todos) if (t.parent === id) t.parent = null;
     this.todos = this.todos.filter(t => t.id !== id);
+    this.todos.forEach((t, i) => t.order = i);
+    await this.commit();
+  }
+
+  async removeBulk(ids) {
+    const idsSet = new Set(ids);
+    // Orphan any children
+    for (const t of this.todos) {
+      if (t.parent && idsSet.has(t.parent)) {
+        t.parent = null;
+      }
+    }
+    this.todos = this.todos.filter(t => !idsSet.has(t.id));
     this.todos.forEach((t, i) => t.order = i);
     await this.commit();
   }
@@ -730,6 +757,77 @@ class WakeStore {
     this.todos.forEach((x, i) => x.order = i);
     await this.commit();
     return { recurred: true, nextDate };
+  }
+
+  async toggleCompleteBulk(ids) {
+    let recurredCount = 0;
+    let anyRecurring = false;
+    let nextTasks = [];
+
+    for (const id of ids) {
+      const t = this.byId(id);
+      if (!t) continue;
+
+      if (t.completed) {
+        t.completed = false;
+        t.completionDate = undefined;
+        continue;
+      }
+
+      if (!t.recurrence) {
+        t.completed = true;
+        t.completionDate = today();
+        continue;
+      }
+
+      const nextDate = nextRecurrenceDate(t.due, t.recurrence);
+      if (!nextDate) {
+        t.completed = true;
+        t.completionDate = today();
+        continue;
+      }
+
+      t.completed = true;
+      t.completionDate = today();
+      this.plugin.data.lastId += 1;
+      const next = {
+        ...t,
+        id: `wk-${this.plugin.data.lastId}`,
+        completed: false,
+        completionDate: undefined,
+        due: nextDate,
+        createdAt: new Date().toISOString(),
+      };
+
+      for (const child of this.todos) {
+        if (child.parent === id) {
+          child.parent = next.id;
+          if (child.completed) {
+            child.completed = false;
+            child.completionDate = undefined;
+          }
+        }
+      }
+
+      nextTasks.push({ originalId: id, next });
+      recurredCount++;
+      anyRecurring = true;
+    }
+
+    if (anyRecurring) {
+      // Sort nextTasks so that we can insert them in reverse order or correctly relative to their parents
+      // the simplest way is to splice them in right after their parents.
+      for (const { originalId, next } of nextTasks) {
+        const idx = this.todos.findIndex(x => x.id === originalId);
+        if (idx !== -1) {
+          this.todos.splice(idx + 1, 0, next);
+        }
+      }
+      this.todos.forEach((x, i) => x.order = i);
+    }
+
+    await this.commit();
+    return recurredCount;
   }
 
   async moveToProject(todoId, projectId) {
@@ -2868,9 +2966,9 @@ class WakeView extends ItemView {
       const t = this.getTodo(id);
       if (t) {
         this.undoStack.push({ todoId: id, prev: { project: t.project } });
-        await this.plugin.store.moveToProject(id, projectId);
       }
     }
+    await this.plugin.store.updateBulk(ids, { project: projectId });
     const projName = projectId ? (this.plugin.store.projectById(projectId)?.name || 'project') : 'Inbox';
     this.toast(`Moved ${ids.length} to ${projName}`, true);
   }
@@ -2889,15 +2987,15 @@ class WakeView extends ItemView {
   async toggleSelected() {
     const ids = this.targets();
     if (ids.length === 0) return;
-    let recurredCount = 0;
+
     for (const id of ids) {
       const t = this.getTodo(id);
       if (t) {
         this.undoStack.push({ todoId: id, prev: { completed: t.completed, completionDate: t.completionDate } });
-        const result = await this.plugin.store.toggleComplete(id);
-        if (result.recurred) recurredCount++;
       }
     }
+
+    const recurredCount = await this.plugin.store.toggleCompleteBulk(ids);
     this.toast(`Toggled ${ids.length}${recurredCount ? `, ${recurredCount} recurring` : ''}`, true);
   }
 
@@ -2908,9 +3006,9 @@ class WakeView extends ItemView {
       const t = this.getTodo(id);
       if (t) {
         this.undoStack.push({ todoId: id, prev: { priority: t.priority } });
-        await this.plugin.store.update(id, { priority: p ?? undefined });
       }
     }
+    await this.plugin.store.updateBulk(ids, { priority: p ?? undefined });
     this.toast(p ? `Set priority P${p} on ${ids.length}` : `Cleared priority on ${ids.length}`, true);
   }
 
@@ -2921,9 +3019,9 @@ class WakeView extends ItemView {
       const t = this.getTodo(id);
       if (t) {
         this.undoStack.push({ todoId: id, prev: { due: t.due } });
-        await this.plugin.store.update(id, { due: date ?? undefined });
       }
     }
+    await this.plugin.store.updateBulk(ids, { due: date ?? undefined });
     this.toast(date ? `Due: ${date}` : 'Cleared due date', true);
   }
 
@@ -2934,9 +3032,9 @@ class WakeView extends ItemView {
       const t = this.getTodo(id);
       if (t) {
         this.undoStack.push({ todoId: id, prev: { recurrence: t.recurrence } });
-        await this.plugin.store.update(id, { recurrence: rec ?? undefined });
       }
     }
+    await this.plugin.store.updateBulk(ids, { recurrence: rec ?? undefined });
     this.toast(rec ? `Recurrence: every ${rec}` : 'Cleared recurrence', true);
   }
 
@@ -2945,7 +3043,7 @@ class WakeView extends ItemView {
     if (ids.length === 0) return;
     // Deletion removes the task entirely. Completed tasks are kept in the logbook;
     // hitting Delete on a completed task will still remove it (user explicit action).
-    for (const id of ids) await this.plugin.store.remove(id);
+    await this.plugin.store.removeBulk(ids);
     if (this.state.expandedId && ids.includes(this.state.expandedId)) {
       this.state.expandedId = null;
     }
