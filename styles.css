@@ -359,7 +359,7 @@
 }
 .wk-root .wk-cell-text-editing {
   background: var(--wk-bg-elev);
-  border: 1px solid var(--wk-accent) !important;
+  border: 1px solid var(--wk-accent);
   border-radius: 4px;
   padding: 2px 6px;
   margin: -3px -7px;
@@ -767,15 +767,15 @@
 
 .wk-palette-input {
   width: 100%;
-  background: transparent !important;
-  border: none !important;
-  border-bottom: 1px solid var(--background-modifier-border) !important;
-  padding: 14px 16px !important;
-  font-size: 14px !important;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 14px 16px;
+  font-size: 14px;
   color: var(--text-normal);
-  outline: none !important;
-  border-radius: 0 !important;
-  font-family: inherit !important;
+  outline: none;
+  border-radius: 0;
+  font-family: inherit;
 }
 .wk-palette-results {
   padding: 6px 0 8px;
@@ -857,19 +857,19 @@
   padding: 12px 24px 0;
 }
 .wk-qa-input {
-  width: 100% !important;
-  padding: 10px 12px !important;
-  font-size: 14px !important;
-  background: var(--background-primary-alt, var(--background-secondary)) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  border-radius: 6px !important;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--background-primary-alt, var(--background-secondary));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
   color: var(--text-normal);
-  outline: none !important;
+  outline: none;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .wk-qa-input:focus {
-  border-color: var(--interactive-accent) !important;
-  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15) !important;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15);
 }
 .wk-qa-select {
   cursor: pointer;
@@ -877,11 +877,11 @@
   -webkit-appearance: none;
   /* Right padding leaves room for the SVG chevron (12px wide, positioned 12px
      from the right edge) plus a comfortable gap before the option text. */
-  padding: 10px 36px 10px 12px !important;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E") !important;
-  background-position: right 12px center !important;
-  background-size: 12px 12px !important;
-  background-repeat: no-repeat !important;
+  padding: 10px 36px 10px 12px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-size: 12px 12px;
+  background-repeat: no-repeat;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -917,7 +917,7 @@
 }
 .wk-cdd-button:focus,
 .wk-cdd-button-open {
-  border-color: var(--interactive-accent) !important;
+  border-color: var(--interactive-accent);
   box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15);
 }
 .wk-cdd-label {
