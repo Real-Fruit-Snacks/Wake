@@ -3,7 +3,7 @@
   "name": "Wake",
   "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "A keyboard-first task manager for Obsidian. Wake provides projects, recurring tasks, priorities, smart views, and a permanent logbook in a self-contained panel — your vault stays clean while [[Note]] references keep tasks connected to your notes.",
+  "description": "A keyboard-first task manager. Wake provides projects, recurring tasks, priorities, smart views, and a permanent logbook in a self-contained panel — keeping your vault clean while note references connect tasks to your notes.",
   "author": "Real-Fruit-Snacks",
   "authorUrl": "https://github.com/Real-Fruit-Snacks",
   "fundingUrl": "https://github.com/sponsors/Real-Fruit-Snacks",
